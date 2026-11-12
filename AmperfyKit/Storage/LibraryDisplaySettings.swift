@@ -43,7 +43,7 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
   case newestAlbums = 12
   case recentAlbums = 13
   case radios = 14
-  case spotifyPlaylists = 15 // shown as "Deine Top-Mixes"
+  case spotifyPlaylists = 15 // shown as "Spotify-Mixes"
   case ownMixes = 16
 
   public static func createByDisplayName(name: String) -> LibraryDisplayType? {
@@ -83,7 +83,7 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
     case .radios:
       return "Radios"
     case .spotifyPlaylists:
-      return "Deine Top-Mixes"
+      return "Spotify-Mixes"
     case .ownMixes:
       return "Deine Mixes"
     }
@@ -250,7 +250,7 @@ public struct LibraryDisplaySettings: Sendable, Codable {
 // MARK: - PlaylistCategory
 
 /// FireSonic: playlists created by the Navidrome plugins are marked in their comment.
-/// - "[spotify-mix:<id>]" → Spotify mix (Spotify Playlist Import plugin, type "Mix") → "Deine Top-Mixes"
+/// - "[spotify-mix:<id>]" → Spotify mix (Spotify Playlist Import plugin, type "Mix") → "Spotify-Mixes"
 /// - "[mix:<key>]" → mix of the "Eigene Mixe" plugin → "Deine Mixes"
 /// Every other playlist (also normal Spotify imports) stays under "Playlists".
 public enum PlaylistCategory: String, Sendable, Codable {

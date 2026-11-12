@@ -87,6 +87,29 @@ public struct StreamingTranscodings {
   }
 }
 
+// MARK: - Blackbox: Fernsteuerung anderer Geräte
+
+/// While another device (Blackbox on the FireTV) is selected in the player, every playback
+/// command of the app is sent to that device instead of the local player.
+@MainActor
+public protocol PlayerRemoteRedirect: AnyObject {
+  var isRemoteActive: Bool { get }
+  func remotePlay(playables: [AbstractPlayable], index: Int, shuffle: Bool)
+  func remoteEnqueue(playables: [AbstractPlayable], next: Bool)
+  /// toggle | play | pause | next | previous | seek | shuffle | repeat
+  func remoteCommand(_ action: String, value: Double?)
+}
+
+@MainActor
+public enum PlayerRemote {
+  public static weak var redirect: PlayerRemoteRedirect?
+
+  static var active: PlayerRemoteRedirect? {
+    guard let r = redirect, r.isRemoteActive else { return nil }
+    return r
+  }
+}
+
 // MARK: - PlayContext
 
 public struct PlayContext {
@@ -447,6 +470,7 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func toggleShuffle() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("shuffle", value: nil); return }
     playerStatus.setShuffle(!isShuffle)
     musicPlayer.notifyShuffleUpdated()
     musicPlayer.notifyPlaylistUpdated()
@@ -467,6 +491,7 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func setRepeatMode(_ newValue: RepeatMode) {
+    if let remote = PlayerRemote.active { remote.remoteCommand("repeat", value: nil); return }
     playerStatus.setRepeatMode(newValue)
     musicPlayer.notifyRepeatUpdated()
   }
@@ -540,6 +565,7 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func seek(toSecond: Double) {
+    if let remote = PlayerRemote.active { remote.remoteCommand("seek", value: toSecond); return }
     userStatistics.usedAction(.playerSeek)
     guard let currentlyPlaying = currentlyPlaying else { return }
     switch currentlyPlaying.derivedType {
@@ -551,21 +577,25 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func insertContextQueue(playables: [AbstractPlayable]) {
+    if let remote = PlayerRemote.active { remote.remoteEnqueue(playables: playables, next: true); return }
     queueHandler.insertContextQueue(playables: playables)
     musicPlayer.notifyPlaylistUpdated()
   }
 
   func appendContextQueue(playables: [AbstractPlayable]) {
+    if let remote = PlayerRemote.active { remote.remoteEnqueue(playables: playables, next: false); return }
     queueHandler.appendContextQueue(playables: playables)
     musicPlayer.notifyPlaylistUpdated()
   }
 
   func insertUserQueue(playables: [AbstractPlayable]) {
+    if let remote = PlayerRemote.active { remote.remoteEnqueue(playables: playables, next: true); return }
     queueHandler.insertUserQueue(playables: playables)
     musicPlayer.notifyPlaylistUpdated()
   }
 
   func appendUserQueue(playables: [AbstractPlayable]) {
+    if let remote = PlayerRemote.active { remote.remoteEnqueue(playables: playables, next: false); return }
     queueHandler.appendUserQueue(playables: playables)
     musicPlayer.notifyPlaylistUpdated()
   }
@@ -616,10 +646,15 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func play() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("play", value: nil); return }
     musicPlayer.play()
   }
 
   func play(context: PlayContext) {
+    if let remote = PlayerRemote.active {
+      remote.remotePlay(playables: context.playables, index: context.index, shuffle: false)
+      return
+    }
     setPlayerModeForContextPlay(context.type)
     if playerMode == .music, playerStatus.isShuffle {
       playerStatus.setShuffle(false)
@@ -635,6 +670,11 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func playShuffled(context: PlayContext) {
+    if let remote = PlayerRemote.active {
+      guard !context.playables.isEmpty else { return }
+      remote.remotePlay(playables: context.playables, index: Int.random(in: 0 ..< context.playables.count), shuffle: true)
+      return
+    }
     setPlayerModeForContextPlay(context.type)
     guard !context.playables.isEmpty else { return }
     if playerStatus.isShuffle { playerStatus.setShuffle(false) }
@@ -650,10 +690,12 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func pause() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("pause", value: nil); return }
     musicPlayer.pause()
   }
 
   func togglePlayPause() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("toggle", value: nil); return }
     musicPlayer.togglePlayPause()
   }
 
@@ -662,14 +704,17 @@ class PlayerFacadeImpl: PlayerFacade {
   }
 
   func playPrevious() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("previous", value: nil); return }
     musicPlayer.playPrevious()
   }
 
   func playPreviousOrReplay() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("previous", value: nil); return }
     musicPlayer.playPreviousOrReplay()
   }
 
   func playNext() {
+    if let remote = PlayerRemote.active { remote.remoteCommand("next", value: nil); return }
     musicPlayer.playNext()
   }
 

@@ -384,6 +384,16 @@ final class SubsonicServerApi: URLCleanser, Sendable {
     return try createUrl(from: urlComp)
   }
 
+  /// Blackbox: authenticated URL for any API action (e.g. savePlayQueue / getPlayQueue)
+  public func generateUrl(forAction action: String, query: [URLQueryItem]) async throws -> URL {
+    let version = try await determineApiVersionToUse()
+    var comp = try createAuthApiUrlComponent(version: version, forAction: action)
+    for item in query {
+      comp.addQueryItem(name: item.name, value: item.value ?? "")
+    }
+    return try createUrl(from: comp)
+  }
+
   public func generateUrl(forArtworkId id: String) async throws -> URL {
     let version = try await determineApiVersionToUse()
     return try createUrl(from: try createAuthApiUrlComponent(

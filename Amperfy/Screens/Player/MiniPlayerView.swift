@@ -714,6 +714,12 @@ class MiniPlayerView: UIView {
   }
 
   public func openPlayerView(completion: (() -> ())? = nil) {
+    #if !targetEnvironment(macCatalyst)
+      // Blackbox: full screen player (edge to edge, FireTV remote)
+      BlackboxPlayerVC.present()
+      completion?()
+      return
+    #endif
     guard let hostVC = AppDelegate.mainWindowHostVC as? UIViewController else { return }
     let popupPlayer = PopupPlayerVC()
     popupPlayer.modalPresentationStyle = .pageSheet

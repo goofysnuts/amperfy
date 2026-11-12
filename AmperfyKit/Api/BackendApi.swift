@@ -284,6 +284,8 @@ public protocol BackendApi: URLCleanser, Sendable {
   func generateUrl(forArtworkId id: String) async throws -> URL
   /// Blackbox: plain stream/download URL for a song id (story background music, FireTV remote)
   func generateUrl(forSongId id: String) async throws -> URL
+  /// Blackbox: authenticated API URL (Subsonic only)
+  func generateUrl(forAction action: String, query: [URLQueryItem]) async throws -> URL
   func checkForErrorResponse(response: APIDataResponse) -> ResponseError?
   @MainActor
   func createLibrarySyncer(account: Account, storage: PersistentStorage) -> LibrarySyncer
@@ -297,6 +299,10 @@ extension BackendApi {
   }
 
   public func generateUrl(forSongId id: String) async throws -> URL {
+    throw BackendError.notSupported
+  }
+
+  public func generateUrl(forAction action: String, query: [URLQueryItem]) async throws -> URL {
     throw BackendError.notSupported
   }
 }

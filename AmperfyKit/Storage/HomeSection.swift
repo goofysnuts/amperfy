@@ -72,7 +72,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .randomSongs: return "Random Songs"
     case .frequentAlbums: return "Frequently Played Albums"
     case .quickAccess: return "Schnellzugriff"
-    case .topMixes: return "Deine Top-Mixes"
+    case .topMixes: return "Spotify-Mixes"
     case .ownMixes: return "Deine Mixes"
     case .recaps: return "Deine Rückblicke"
     case .songOfTheDay: return "Song des Tages"

@@ -185,6 +185,7 @@ class PlaylistDetailVC: SingleSnapshotFetchedResultsTableViewController<Playlist
     )
 
     snapshotDidChange = detailOperationsView?.refresh
+    applyBlackboxCoverBackground(for: playlist)
 
     containableAtIndexPathCallback = { indexPath in
       self.fetchedResultsController.getWrappedEntity(at: indexPath).playable
@@ -278,6 +279,7 @@ class PlaylistDetailVC: SingleSnapshotFetchedResultsTableViewController<Playlist
   )
     -> UITableViewCell {
     let cell: PlayableTableCell = dequeueCell(for: tableView, at: indexPath)
+    cell.backgroundColor = .clear
     if let song = playlistItem.playable.asSong {
       cell.display(playable: song, playContextCb: convertCellViewToPlayContext, rootView: self)
     }

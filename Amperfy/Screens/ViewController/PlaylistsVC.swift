@@ -213,7 +213,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
     var config = UIContentUnavailableConfiguration.empty()
     if self.spotifyFilter == .only(.topMix) {
       config.image = .topMixes
-      config.text = "Keine Top-Mixes"
+      config.text = "Keine Spotify-Mixes"
       config.secondaryText = "Spotify-Mixe, die mit dem Navidrome-Plugin „Spotify Playlist Import“ als „Mix“ importiert werden, erscheinen hier."
     } else if self.spotifyFilter == .only(.ownMix) {
       config.image = .ownMixes

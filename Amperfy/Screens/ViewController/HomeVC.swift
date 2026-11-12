@@ -33,7 +33,7 @@ final class HomeVC: UICollectionViewController {
   private let log = OSLog(subsystem: "Amperfy", category: "HomeVC")
 
   private static let itemWidth: CGFloat = 160.0
-  /// FireSonic: the mix sections get larger covers (Spotify-like "Deine Top-Mixes")
+  /// FireSonic: the mix sections get larger covers (Spotify-like "Spotify-Mixes")
   private static let mixItemWidth: CGFloat = 176.0
 
   private static func itemWidth(for section: HomeSection?) -> CGFloat {
@@ -110,13 +110,6 @@ final class HomeVC: UICollectionViewController {
     )
 
     navigationController?.navigationBar.prefersLargeTitles = true
-    navigationItem.rightBarButtonItem = UIBarButtonItem(
-      image: UIImage(systemName: "tv"),
-      style: .plain,
-      target: self,
-      action: #selector(remoteTapped)
-    )
-    navigationItem.rightBarButtonItem?.accessibilityLabel = "FireTV fernsteuern"
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(appearanceChanged),

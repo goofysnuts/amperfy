@@ -20,7 +20,10 @@
 //
 
 import AmperfyKit
+import AVKit
+import DominantColors
 import Network
+import SwiftUI
 import UIKit
 
 // MARK: - TabBarVC
@@ -44,6 +47,7 @@ class TabBarVC: UITabBarController {
 
   private var welcomePopupPresenter = WelcomePopupPresenter()
   var miniPlayer: MiniPlayerView?
+  let blackboxMini = BlackboxMiniPlayer()
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -144,18 +148,20 @@ class TabBarVC: UITabBarController {
 
     miniPlayer = MiniPlayerView(player: appDelegate.player)
     miniPlayer!.configureForiOS()
-    miniPlayer!.glassContainer.translatesAutoresizingMaskIntoConstraints = false
+    // Blackbox: own mini player (larger, progress ring around the play button, FireTV remote)
+    blackboxMini.translatesAutoresizingMaskIntoConstraints = false
 
-    let accessory = UITabAccessory(contentView: miniPlayer!.glassContainer)
+    let accessory = UITabAccessory(contentView: blackboxMini)
     bottomAccessory = accessory
 
-    heightConstraint = miniPlayer!.glassContainer.heightAnchor.constraint(equalToConstant: 48.0)
+    heightConstraint = blackboxMini.heightAnchor.constraint(equalToConstant: 56.0)
     heightConstraint?.isActive = true
-    compactWidthConstraint = miniPlayer!.glassContainer.widthAnchor
-      .constraint(equalTo: miniPlayer!.glassContainer.superview!.widthAnchor)
+    compactWidthConstraint = blackboxMini.widthAnchor
+      .constraint(equalTo: blackboxMini.superview!.widthAnchor)
 
-    miniPlayer!.tabAccessoryTraitChangeCB = configureTraitChangesForMiniPlayer
+    blackboxMini.traitChangeCB = { [weak self] in self?.configureTraitChangesForMiniPlayer() }
     configureTraitChangesForMiniPlayer()
+    if PlayQueueSync.isEnabled { PlayQueueSync.shared.start() }
 
     registerForTraitChanges(
       [UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self],
@@ -186,11 +192,12 @@ class TabBarVC: UITabBarController {
   var compactWidthConstraint: NSLayoutConstraint?
 
   func configureTraitChangesForMiniPlayer() {
-    guard let miniPlayer else { return }
-    let isInline = miniPlayer.glassContainer.traitCollection.tabAccessoryEnvironment == .inline
+    let container: UIView = blackboxMini
+    guard container.superview != nil else { return }
+    let isInline = container.traitCollection.tabAccessoryEnvironment == .inline
 
     if traitCollection.horizontalSizeClass == .regular {
-      centerConstraint = miniPlayer.glassContainer.safeAreaLayoutGuide.centerXAnchor.constraint(
+      centerConstraint = container.safeAreaLayoutGuide.centerXAnchor.constraint(
         equalTo: mainContent().safeAreaLayoutGuide.centerXAnchor,
         constant: 0
       )
@@ -200,25 +207,25 @@ class TabBarVC: UITabBarController {
       playerWidth = min(playerWidth, 600)
       compactWidthConstraint?.isActive = false
       regularWidthConstraint?.isActive = false
-      regularWidthConstraint = miniPlayer.glassContainer.widthAnchor
+      regularWidthConstraint = container.widthAnchor
         .constraint(equalToConstant: playerWidth)
       regularWidthConstraint?.isActive = true
       centerConstraint?.isActive = true
-      heightConstraint?.constant = 60.0
+      heightConstraint?.constant = 64.0
     } else if isInline {
-      heightConstraint?.constant = 48.0
+      heightConstraint?.constant = 44.0
       centerConstraint?.isActive = false
       regularWidthConstraint?.isActive = false
       compactWidthConstraint?.isActive = true
     } else {
-      heightConstraint?.constant = 48.0
+      heightConstraint?.constant = 56.0
       centerConstraint?.isActive = false
       regularWidthConstraint?.isActive = false
       compactWidthConstraint?.isActive = true
     }
 
-    miniPlayer.glassContainer.setNeedsLayout()
-    miniPlayer.glassContainer.layoutIfNeeded()
+    container.setNeedsLayout()
+    container.layoutIfNeeded()
   }
 
   override func viewWillLayoutSubviews() {
@@ -355,6 +362,8 @@ struct FireTVStatus: Decodable, Sendable {
   let songId: String?
   let queueIndex: Int?
   let queueLength: Int?
+  let shuffle: Bool?
+  let repeatMode: Int?
 }
 
 @MainActor
@@ -405,11 +414,16 @@ final class FireTVClient {
     _ = try await request("control", method: "POST", query: q)
   }
 
-  func playQueue(songIds: [String], index: Int, position: Double) async throws {
+  func playQueue(songIds: [String], index: Int, position: Double, shuffle: Bool = false) async throws {
     let body = try JSONSerialization.data(withJSONObject: [
-      "songIds": songIds, "index": index, "position": position,
+      "songIds": songIds, "index": index, "position": position, "shuffle": shuffle,
     ])
     _ = try await request("queue", method: "POST", body: body)
+  }
+
+  func enqueue(songIds: [String], next: Bool) async throws {
+    let body = try JSONSerialization.data(withJSONObject: ["songIds": songIds, "next": next])
+    _ = try await request("enqueue", method: "POST", body: body)
   }
 }
 
@@ -812,5 +826,1133 @@ final class FireTVRemoteVC: UIViewController {
         appDelegateRef.eventLogger.info(topic: "FireTV", message: "Übertragung fehlgeschlagen.")
       }
     }
+  }
+}
+
+// MARK: - RemoteSession (Blackbox)
+
+/// Connection to Blackbox on the FireTV. While connected the iPhone works like a remote:
+/// every playback command of the app is redirected to the TV (see `PlayerRemote`).
+@MainActor
+final class RemoteSession: PlayerRemoteRedirect {
+  static let shared = RemoteSession()
+  static let changedNotification = Notification.Name("de.jannes.blackbox.remoteChanged")
+
+  private(set) var client: FireTVClient?
+  private(set) var deviceName: String?
+  private(set) var status: FireTVStatus?
+  private var pollTask: Task<(), Never>?
+  private var appDelegateRef: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  var isRemoteActive: Bool { client != nil }
+
+  func connect(host: String, name: String?) {
+    guard let c = FireTVClient(host: host) else { return }
+    client = c
+    deviceName = name ?? host
+    FireTVClient.savedHost = host
+    PlayerRemote.redirect = self
+    // the iPhone only works as a remote now
+    if appDelegateRef.player.isPlaying {
+      PlayerRemote.redirect = nil
+      appDelegateRef.player.pause()
+      PlayerRemote.redirect = self
+    }
+    startPolling()
+    post()
+  }
+
+  func disconnect() {
+    pollTask?.cancel()
+    pollTask = nil
+    client = nil
+    status = nil
+    deviceName = nil
+    PlayerRemote.redirect = nil
+    post()
+  }
+
+  private func post() {
+    NotificationCenter.default.post(name: Self.changedNotification, object: nil)
+  }
+
+  private func startPolling() {
+    pollTask?.cancel()
+    pollTask = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        await self?.refresh()
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+      }
+    }
+  }
+
+  func refresh() async {
+    guard let client else { return }
+    status = try? await client.status()
+    post()
+  }
+
+  /// Transfers what plays on the iPhone to the TV
+  func transferLocalPlayback() {
+    let player = appDelegateRef.player
+    guard let client, let current = player.currentlyPlaying else { return }
+    let prev = player.getAllPrevQueueItems().suffix(100)
+    let next = player.getAllUserQueueItems() + player.getAllNextQueueItems()
+    let ids = prev.map(\.id) + [current.id] + next.prefix(200).map(\.id)
+    let position = player.elapsedTime
+    Task { @MainActor in
+      try? await client.playQueue(songIds: ids, index: prev.count, position: position)
+      await refresh()
+    }
+  }
+
+  // MARK: PlayerRemoteRedirect
+
+  func remotePlay(playables: [AbstractPlayable], index: Int, shuffle: Bool) {
+    guard let client else { return }
+    let ids = playables.prefix(500).map(\.id)
+    guard !ids.isEmpty else { return }
+    Task { @MainActor in
+      do {
+        try await client.playQueue(songIds: ids, index: min(index, ids.count - 1), position: 0, shuffle: shuffle)
+      } catch {
+        appDelegateRef.eventLogger.info(topic: "FireTV", message: "Wiedergabe auf dem FireTV fehlgeschlagen.")
+      }
+      await refresh()
+    }
+  }
+
+  func remoteEnqueue(playables: [AbstractPlayable], next: Bool) {
+    guard let client else { return }
+    let ids = playables.prefix(500).map(\.id)
+    Task { @MainActor in
+      try? await client.enqueue(songIds: ids, next: next)
+      await refresh()
+    }
+  }
+
+  func remoteCommand(_ action: String, value: Double?) {
+    guard let client else { return }
+    Task { @MainActor in
+      try? await client.control(action, value: value)
+      await refresh()
+    }
+  }
+}
+
+// MARK: - Now playing (local or remote)
+
+@MainActor
+struct BlackboxNowPlaying {
+  var title: String
+  var artist: String
+  var song: Song?
+  var playable: AbstractPlayable?
+  var coverArtId: String?
+  var isPlaying: Bool
+  var position: Double
+  var duration: Double
+  var isShuffle: Bool
+  var repeatMode: RepeatMode
+  var isRemote: Bool
+  var hasItem: Bool
+
+  static func current() -> BlackboxNowPlaying {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    let player = delegate.player
+    let remote = RemoteSession.shared
+    if remote.isRemoteActive {
+      let s = remote.status
+      var song: Song?
+      if let id = s?.songId, let info = delegate.storage.settings.accounts.active {
+        let account = delegate.storage.main.library.getAccount(info: info)
+        song = delegate.storage.main.library.getSong(for: account, id: id)
+      }
+      return BlackboxNowPlaying(
+        title: s?.title ?? "Nichts wird abgespielt",
+        artist: s.map { _ in s?.artist ?? "" } ?? "Verbinde mit \(remote.deviceName ?? "FireTV") …",
+        song: song,
+        playable: song,
+        coverArtId: s?.coverArt,
+        isPlaying: s?.playing ?? false,
+        position: s?.position ?? 0,
+        duration: s?.duration ?? 0,
+        isShuffle: s?.shuffle ?? false,
+        repeatMode: RepeatMode(rawValue: Int16(s?.repeatMode ?? 0)) ?? .off,
+        isRemote: true,
+        hasItem: s?.title != nil
+      )
+    }
+    let cur = player.currentlyPlaying
+    return BlackboxNowPlaying(
+      title: cur?.title ?? "Nichts wird abgespielt",
+      artist: cur?.creatorName ?? "",
+      song: cur?.asSong,
+      playable: cur,
+      coverArtId: nil,
+      isPlaying: player.isPlaying,
+      position: player.elapsedTime,
+      duration: player.duration,
+      isShuffle: player.isShuffle,
+      repeatMode: player.repeatMode,
+      isRemote: false,
+      hasItem: cur != nil
+    )
+  }
+
+  /// Artwork: local cache first, then the server cover (remote)
+  func loadArtwork(_ completion: @escaping @MainActor (UIImage?) -> ()) {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    if let playable, let info = playable.account?.info {
+      let setting = delegate.storage.settings.accounts.getSetting(info).read
+      let image = LibraryEntityImage.getImageToDisplayImmediately(
+        libraryEntity: playable,
+        themePreference: setting.themePreference,
+        artworkDisplayPreference: setting.artworkDisplayPreference,
+        useCache: true
+      )
+      if let artwork = playable.artwork {
+        delegate.getMeta(info).artworkDownloadManager.download(object: artwork)
+      }
+      if coverArtId == nil {
+        completion(image)
+        return
+      }
+    }
+    guard let coverArtId, let info = delegate.storage.settings.accounts.active else {
+      completion(nil)
+      return
+    }
+    Task { @MainActor in
+      completion(await PlaylistCoverLoader.shared.image(coverArtId: coverArtId, accountInfo: info))
+    }
+  }
+}
+
+// MARK: - BlackboxMiniPlayer
+
+/// Mini player in the tab bar accessory: artwork, title/artist, play button with circular
+/// progress ring and next. Shows the FireTV while it is controlled remotely.
+final class BlackboxMiniPlayer: UIView, MusicPlayable {
+  private let artwork = UIImageView()
+  private let titleLabel = UILabel()
+  private let subtitleLabel = UILabel()
+  private let playButton = UIButton(type: .system)
+  private let nextButton = UIButton(type: .system)
+  private let ringTrack = CAShapeLayer()
+  private let ring = CAShapeLayer()
+  private let ringHost = UIView()
+  private var timer: Timer?
+  private var lastArtworkKey: String?
+  private var appDelegateRef: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    artwork.contentMode = .scaleAspectFill
+    artwork.clipsToBounds = true
+    artwork.layer.cornerRadius = 8
+    artwork.layer.cornerCurve = .continuous
+    artwork.backgroundColor = .tertiarySystemFill
+
+    titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+    subtitleLabel.font = .systemFont(ofSize: 13)
+    subtitleLabel.textColor = .secondaryLabel
+
+    var playConfig = UIButton.Configuration.plain()
+    playConfig.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
+    playConfig.baseForegroundColor = .label
+    playButton.configuration = playConfig
+    playButton.accessibilityLabel = "Wiedergabe"
+    playButton.addAction(UIAction { [weak self] _ in self?.appDelegateRef.player.togglePlayPause() }, for: .touchUpInside)
+
+    var nextConfig = UIButton.Configuration.plain()
+    nextConfig.image = UIImage(systemName: "forward.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
+    nextConfig.baseForegroundColor = .label
+    nextButton.configuration = nextConfig
+    nextButton.accessibilityLabel = "Weiter"
+    nextButton.addAction(UIAction { [weak self] _ in self?.appDelegateRef.player.playNext() }, for: .touchUpInside)
+
+    ringHost.isUserInteractionEnabled = false
+    ringTrack.fillColor = UIColor.clear.cgColor
+    ringTrack.lineWidth = 2.5
+    ring.fillColor = UIColor.clear.cgColor
+    ring.lineWidth = 2.5
+    ring.lineCap = .round
+    ring.strokeEnd = 0
+    ringHost.layer.addSublayer(ringTrack)
+    ringHost.layer.addSublayer(ring)
+
+    let texts = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+    texts.axis = .vertical
+    texts.spacing = 1
+    [artwork, texts, ringHost, playButton, nextButton].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
+    NSLayoutConstraint.activate([
+      artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
+      artwork.heightAnchor.constraint(equalTo: heightAnchor, constant: -12),
+      artwork.widthAnchor.constraint(equalTo: artwork.heightAnchor),
+      texts.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 10),
+      texts.centerYAnchor.constraint(equalTo: centerYAnchor),
+      texts.trailingAnchor.constraint(lessThanOrEqualTo: playButton.leadingAnchor, constant: -6),
+      nextButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+      nextButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+      nextButton.widthAnchor.constraint(equalToConstant: 40),
+      nextButton.heightAnchor.constraint(equalToConstant: 40),
+      playButton.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor, constant: -2),
+      playButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+      playButton.widthAnchor.constraint(equalToConstant: 40),
+      playButton.heightAnchor.constraint(equalToConstant: 40),
+      ringHost.centerXAnchor.constraint(equalTo: playButton.centerXAnchor),
+      ringHost.centerYAnchor.constraint(equalTo: playButton.centerYAnchor),
+      ringHost.widthAnchor.constraint(equalToConstant: 36),
+      ringHost.heightAnchor.constraint(equalToConstant: 36),
+    ])
+    let tap = UITapGestureRecognizer(target: self, action: #selector(openPlayer))
+    addGestureRecognizer(tap)
+    isAccessibilityElement = false
+
+    appDelegateRef.player.addNotifier(notifier: self)
+    NotificationCenter.default.addObserver(self, selector: #selector(remoteChanged), name: RemoteSession.changedNotification, object: nil)
+    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated { self?.refreshProgress() }
+    }
+    refresh()
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let path = UIBezierPath(
+      arcCenter: CGPoint(x: 18, y: 18),
+      radius: 16.5,
+      startAngle: -.pi / 2,
+      endAngle: 1.5 * .pi,
+      clockwise: true
+    ).cgPath
+    ringTrack.path = path
+    ring.path = path
+  }
+
+  var traitChangeCB: (() -> ())?
+
+  override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+    super.traitCollectionDidChange(previous)
+    subtitleLabel.isHidden = traitCollection.tabAccessoryEnvironment == .inline
+    refreshColors()
+    traitChangeCB?()
+  }
+
+  private func refreshColors() {
+    ringTrack.strokeColor = UIColor.label.withAlphaComponent(0.18).resolvedColor(with: traitCollection).cgColor
+    ring.strokeColor = tintColor.resolvedColor(with: traitCollection).cgColor
+  }
+
+  override func tintColorDidChange() {
+    super.tintColorDidChange()
+    refreshColors()
+  }
+
+  @objc
+  private func openPlayer() {
+    BlackboxPlayerVC.present()
+  }
+
+  @objc
+  private func remoteChanged() { refresh() }
+
+  func refresh() {
+    let np = BlackboxNowPlaying.current()
+    titleLabel.text = np.title
+    var sub = np.artist
+    if np.isRemote { sub = "📺 " + (RemoteSession.shared.deviceName ?? "FireTV") + (sub.isEmpty ? "" : " · " + sub) }
+    subtitleLabel.text = sub
+    var config = playButton.configuration
+    config?.image = UIImage(
+      systemName: np.isPlaying ? "pause.fill" : "play.fill",
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
+    )
+    playButton.configuration = config
+    playButton.accessibilityLabel = np.isPlaying ? "Pause" : "Wiedergabe"
+    refreshColors()
+    refreshProgress(np)
+    let key = (np.coverArtId ?? "") + (np.playable?.id ?? "")
+    if key != lastArtworkKey {
+      lastArtworkKey = key
+      np.loadArtwork { [weak self] image in
+        guard let self, self.lastArtworkKey == key else { return }
+        self.artwork.image = image
+      }
+    }
+  }
+
+  private func refreshProgress(_ given: BlackboxNowPlaying? = nil) {
+    let np = given ?? BlackboxNowPlaying.current()
+    let value = np.duration > 0 ? CGFloat(np.position / np.duration) : 0
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    ring.strokeEnd = max(0, min(1, value))
+    CATransaction.commit()
+  }
+
+  // MARK: MusicPlayable
+  func didStartPlayingFromBeginning() { refresh() }
+  func didStartPlaying() { refresh() }
+  func didPause() { refresh() }
+  func didStopPlaying() { refresh() }
+  func didElapsedTimeChange() { refreshProgress() }
+  func didPlaylistChange() { refresh() }
+  func didArtworkChange() { lastArtworkKey = nil; refresh() }
+  func didShuffleChange() {}
+  func didRepeatChange() {}
+  func didPlaybackRateChange() {}
+}
+
+// MARK: - BlackboxPlayerVC
+
+/// Full screen player (edge to edge, background from the cover colors).
+/// Works for the local player and – while connected – for the FireTV.
+final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegate {
+  static func present() {
+    guard let host = AppDelegate.mainWindowHostVC as? UIViewController else { return }
+    var top: UIViewController = host
+    while let presented = top.presentedViewController { top = presented }
+    if top is BlackboxPlayerVC { return }
+    let vc = BlackboxPlayerVC()
+    vc.modalPresentationStyle = .fullScreen
+    top.present(vc, animated: true)
+  }
+
+  private let gradient = CAGradientLayer()
+  private let scroll = UIScrollView()
+  private let remoteBadge = UILabel()
+  private let coverView = UIImageView()
+  private let titleLabel = UILabel()
+  private let artistLabel = UILabel()
+  private let favoriteButton = UIButton(type: .system)
+  private let ratingView = RatingView()
+  private let optionsButton = UIButton(type: .system)
+  private let slider = UISlider()
+  private let elapsedLabel = UILabel()
+  private let remainingLabel = UILabel()
+  private let audioInfoLabel = UILabel()
+  private let shuffleButton = UIButton(type: .system)
+  private let prevButton = UIButton(type: .system)
+  private let playButton = UIButton(type: .system)
+  private let nextButton = UIButton(type: .system)
+  private let repeatButton = UIButton(type: .system)
+  private let devicesButton = UIButton(type: .system)
+  private let settingsButton = UIButton(type: .system)
+  private let closeButton = UIButton(type: .system)
+  private let lyricsButton = UIButton(type: .system)
+  private let queueButton = UIButton(type: .system)
+  private let sleepButton = UIButton(type: .system)
+
+  private var isScrubbing = false
+  private var lastArtworkKey: String?
+  private var appDelegateRef: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+  private var player: PlayerFacade { appDelegateRef.player }
+
+  override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    overrideUserInterfaceStyle = .dark
+    view.backgroundColor = .black
+    gradient.colors = [UIColor.darkGray.cgColor, UIColor.black.cgColor]
+    view.layer.addSublayer(gradient)
+    buildUI()
+    player.addNotifier(notifier: self)
+    NotificationCenter.default.addObserver(self, selector: #selector(remoteChanged), name: RemoteSession.changedNotification, object: nil)
+    let swipe = UISwipeGestureRecognizer(target: self, action: #selector(close))
+    swipe.direction = .down
+    view.addGestureRecognizer(swipe)
+    refresh()
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    gradient.frame = view.bounds
+  }
+
+  private func symbol(_ button: UIButton, _ name: String, size: CGFloat, weight: UIImage.SymbolWeight = .semibold, label: String, filled: Bool = false) {
+    var c = filled ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
+    c.image = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: weight))
+    c.baseForegroundColor = filled ? .black : .white
+    if filled {
+      c.baseBackgroundColor = UIColor.white.withAlphaComponent(0.85)
+      c.cornerStyle = .capsule
+    }
+    button.configuration = c
+    button.accessibilityLabel = label
+  }
+
+  private func buildUI() {
+    remoteBadge.font = .systemFont(ofSize: 13, weight: .semibold)
+    remoteBadge.textColor = UIColor.white.withAlphaComponent(0.85)
+    remoteBadge.textAlignment = .center
+
+    coverView.contentMode = .scaleAspectFill
+    coverView.clipsToBounds = true
+    coverView.layer.cornerRadius = 12
+    coverView.layer.cornerCurve = .continuous
+    coverView.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+
+    titleLabel.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: .systemFont(ofSize: 24, weight: .bold), maximumPointSize: 34)
+    titleLabel.adjustsFontForContentSizeCategory = true
+    titleLabel.textColor = .white
+    titleLabel.textAlignment = .center
+    titleLabel.numberOfLines = 2
+    artistLabel.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: .systemFont(ofSize: 20), maximumPointSize: 28)
+    artistLabel.adjustsFontForContentSizeCategory = true
+    artistLabel.textColor = UIColor.white.withAlphaComponent(0.8)
+    artistLabel.textAlignment = .center
+
+    symbol(favoriteButton, "heart", size: 22, weight: .regular, label: "Favorit")
+    favoriteButton.addAction(UIAction { [weak self] _ in self?.toggleFavorite() }, for: .touchUpInside)
+    ratingView.delegate = self
+    symbol(optionsButton, "ellipsis", size: 20, label: "Mehr")
+    optionsButton.showsMenuAsPrimaryAction = true
+
+    slider.minimumTrackTintColor = .white
+    slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.3)
+    slider.setThumbImage(UIImage(), for: .normal)
+    slider.addTarget(self, action: #selector(scrubStart), for: .touchDown)
+    slider.addTarget(self, action: #selector(scrubEnd), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+    slider.addTarget(self, action: #selector(scrubChanged), for: .valueChanged)
+    [elapsedLabel, remainingLabel, audioInfoLabel].forEach {
+      $0.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+      $0.textColor = UIColor.white.withAlphaComponent(0.7)
+    }
+    audioInfoLabel.textAlignment = .center
+    remainingLabel.textAlignment = .right
+
+    symbol(prevButton, "backward.fill", size: 30, label: "Zurück")
+    symbol(playButton, "play.fill", size: 44, label: "Wiedergabe")
+    symbol(nextButton, "forward.fill", size: 30, label: "Weiter")
+    prevButton.addAction(UIAction { [weak self] _ in self?.player.playPreviousOrReplay() }, for: .touchUpInside)
+    playButton.addAction(UIAction { [weak self] _ in self?.player.togglePlayPause() }, for: .touchUpInside)
+    nextButton.addAction(UIAction { [weak self] _ in self?.player.playNext() }, for: .touchUpInside)
+    shuffleButton.addAction(UIAction { [weak self] _ in self?.player.toggleShuffle() }, for: .touchUpInside)
+    repeatButton.addAction(UIAction { [weak self] _ in
+      guard let self else { return }
+      self.player.setRepeatMode(self.player.repeatMode.nextMode)
+    }, for: .touchUpInside)
+
+    symbol(devicesButton, "airplayaudio", size: 20, label: "Wiedergabegerät")
+    devicesButton.addAction(UIAction { [weak self] _ in self?.showDevices() }, for: .touchUpInside)
+    symbol(settingsButton, "gearshape.fill", size: 20, label: "Schnelleinstellungen")
+    settingsButton.addAction(UIAction { [weak self] _ in self?.showQuickSettings() }, for: .touchUpInside)
+    symbol(closeButton, "chevron.down", size: 22, label: "Schließen")
+    closeButton.addAction(UIAction { [weak self] _ in self?.close() }, for: .touchUpInside)
+    symbol(lyricsButton, "quote.bubble", size: 20, label: "Songtext")
+    lyricsButton.addAction(UIAction { [weak self] _ in self?.showSheet(LyricsVC()) }, for: .touchUpInside)
+    symbol(queueButton, "list.bullet", size: 20, label: "Wiedergabeliste")
+    queueButton.addAction(UIAction { [weak self] _ in self?.showSheet(QueueVC()) }, for: .touchUpInside)
+    symbol(sleepButton, "moon.zzz", size: 20, label: "Schlaftimer")
+    sleepButton.showsMenuAsPrimaryAction = true
+
+    let ratingRow = UIStackView(arrangedSubviews: [favoriteButton, ratingView, optionsButton])
+    ratingRow.distribution = .equalCentering
+    ratingRow.alignment = .center
+    let timeRow = UIStackView(arrangedSubviews: [elapsedLabel, audioInfoLabel, remainingLabel])
+    timeRow.distribution = .fillEqually
+    let transport = UIStackView(arrangedSubviews: [shuffleButton, prevButton, playButton, nextButton, repeatButton])
+    transport.distribution = .equalSpacing
+    transport.alignment = .center
+    let bottom = UIStackView(arrangedSubviews: [devicesButton, settingsButton, closeButton, lyricsButton, queueButton, sleepButton])
+    bottom.distribution = .equalSpacing
+    bottom.alignment = .center
+
+    let stack = UIStackView(arrangedSubviews: [remoteBadge, coverView, titleLabel, artistLabel, ratingRow, slider, timeRow, transport, bottom])
+    stack.axis = .vertical
+    stack.spacing = 10
+    stack.setCustomSpacing(26, after: coverView)
+    stack.setCustomSpacing(2, after: titleLabel)
+    stack.setCustomSpacing(18, after: artistLabel)
+    stack.setCustomSpacing(14, after: ratingRow)
+    stack.setCustomSpacing(4, after: slider)
+    stack.setCustomSpacing(22, after: timeRow)
+    stack.setCustomSpacing(28, after: transport)
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    scroll.translatesAutoresizingMaskIntoConstraints = false
+    scroll.alwaysBounceVertical = false
+    scroll.showsVerticalScrollIndicator = false
+    view.addSubview(scroll)
+    scroll.addSubview(stack)
+
+    let cover = coverView.widthAnchor.constraint(equalTo: stack.widthAnchor)
+    cover.priority = .defaultHigh
+    NSLayoutConstraint.activate([
+      scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+      scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 12),
+      stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -8),
+      stack.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
+      stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
+      stack.widthAnchor.constraint(lessThanOrEqualToConstant: 560),
+      cover,
+      coverView.heightAnchor.constraint(equalTo: coverView.widthAnchor),
+      coverView.heightAnchor.constraint(lessThanOrEqualTo: view.heightAnchor, multiplier: 0.45),
+      ratingView.heightAnchor.constraint(equalToConstant: 36),
+      playButton.widthAnchor.constraint(equalToConstant: 72),
+      playButton.heightAnchor.constraint(equalToConstant: 72),
+      shuffleButton.widthAnchor.constraint(equalToConstant: 44),
+      shuffleButton.heightAnchor.constraint(equalToConstant: 44),
+      repeatButton.widthAnchor.constraint(equalToConstant: 44),
+      repeatButton.heightAnchor.constraint(equalToConstant: 44),
+      bottom.heightAnchor.constraint(equalToConstant: 44),
+    ])
+  }
+
+  // MARK: Refresh
+
+  @objc
+  private func remoteChanged() { refresh() }
+
+  private func refresh() {
+    let np = BlackboxNowPlaying.current()
+    remoteBadge.isHidden = !np.isRemote
+    remoteBadge.text = "📺  Spielt auf \(RemoteSession.shared.deviceName ?? "FireTV")"
+    titleLabel.text = np.title
+    artistLabel.text = np.artist
+    symbol(playButton, np.isPlaying ? "pause.fill" : "play.fill", size: 44, label: np.isPlaying ? "Pause" : "Wiedergabe")
+    symbol(shuffleButton, "shuffle", size: 17, label: "Zufall", filled: np.isShuffle)
+    let repeatName = np.repeatMode == .single ? "repeat.1" : "repeat"
+    symbol(repeatButton, repeatName, size: 17, label: "Wiederholen", filled: np.repeatMode != .off)
+    if np.isRemote {
+      symbol(devicesButton, "tv.fill", size: 20, label: "Wiedergabegerät")
+      devicesButton.configuration?.baseForegroundColor = view.tintColor
+    } else {
+      symbol(devicesButton, "airplayaudio", size: 20, label: "Wiedergabegerät")
+    }
+
+    let song = np.song
+    favoriteButton.isEnabled = song != nil
+    symbol(favoriteButton, (song?.isFavorite ?? false) ? "heart.fill" : "heart", size: 22, weight: .regular, label: "Favorit")
+    if song?.isFavorite == true { favoriteButton.configuration?.baseForegroundColor = .redHeart }
+    ratingView.isRatingEnabled = song != nil
+    ratingView.setRating(song?.rating ?? 0)
+    if let song {
+      optionsButton.isEnabled = true
+      optionsButton.menu = UIMenu.lazyMenu { [weak self] in
+        guard let self else { return [] }
+        return EntityPreviewActionBuilder(container: song, on: self).createMenuActions()
+      }
+    } else {
+      optionsButton.isEnabled = false
+    }
+    sleepButton.menu = UIMenu(children: [appDelegateRef.createSleepTimerMenu(refreshCB: nil)])
+    lyricsButton.isEnabled = !np.isRemote
+    queueButton.isEnabled = !np.isRemote
+
+    refreshTime(np)
+
+    let key = (np.coverArtId ?? "") + (np.playable?.id ?? "")
+    if key != lastArtworkKey {
+      lastArtworkKey = key
+      np.loadArtwork { [weak self] image in
+        guard let self, self.lastArtworkKey == key else { return }
+        UIView.transition(with: self.coverView, duration: 0.3, options: .transitionCrossDissolve) {
+          self.coverView.image = image
+        }
+        self.applyColors(from: image)
+      }
+    }
+  }
+
+  private func applyColors(from image: UIImage?) {
+    var colors: [UIColor] = [UIColor(white: 0.25, alpha: 1), .black]
+    if let image, let dominant = try? image.dominantColors(max: 2), let first = dominant.first {
+      let darker = Self.darken(first, by: 0.55)
+      let darkest = Self.darken(dominant.count > 1 ? dominant[1] : first, by: 0.25)
+      colors = [darker, darkest]
+    }
+    let anim = CABasicAnimation(keyPath: "colors")
+    anim.fromValue = gradient.colors
+    anim.toValue = colors.map(\.cgColor)
+    anim.duration = 0.5
+    gradient.add(anim, forKey: "colors")
+    gradient.colors = colors.map(\.cgColor)
+  }
+
+  private static func darken(_ color: UIColor, by factor: CGFloat) -> UIColor {
+    var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+    color.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+    return UIColor(hue: h, saturation: min(1, s * 1.1), brightness: max(0.08, min(b, 0.9) * factor), alpha: 1)
+  }
+
+  private static func time(_ sec: Double) -> String {
+    let s = max(0, Int(sec.rounded()))
+    return String(format: "%d:%02d", s / 60, s % 60)
+  }
+
+  private func refreshTime(_ given: BlackboxNowPlaying? = nil) {
+    guard !isScrubbing else { return }
+    let np = given ?? BlackboxNowPlaying.current()
+    slider.maximumValue = Float(max(1, np.duration))
+    slider.value = Float(np.position)
+    slider.isEnabled = np.hasItem
+    elapsedLabel.text = np.hasItem ? Self.time(np.position) : "--:--"
+    remainingLabel.text = np.hasItem ? "-" + Self.time(np.duration - np.position) : "--:--"
+    if np.isRemote {
+      audioInfoLabel.text = "FireTV"
+    } else if let cur = player.currentlyPlaying {
+      let kbps = cur.bitrate / 1000
+      let source = player.playType == .cache ? "Cache" : "Stream"
+      let format = (cur.fileContentType ?? cur.contentType ?? "").split(separator: "/").last.map { String($0).uppercased().replacingOccurrences(of: "MPEG", with: "MP3") } ?? ""
+      audioInfoLabel.text = [source, format, kbps > 0 ? "\(kbps) kbps" : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+    } else {
+      audioInfoLabel.text = ""
+    }
+  }
+
+  // MARK: Actions
+
+  @objc
+  private func close() { dismiss(animated: true) }
+
+  @objc private func scrubStart() { isScrubbing = true }
+
+  @objc private func scrubChanged() {
+    elapsedLabel.text = Self.time(Double(slider.value))
+    remainingLabel.text = "-" + Self.time(Double(slider.maximumValue - slider.value))
+  }
+
+  @objc private func scrubEnd() {
+    isScrubbing = false
+    player.seek(toSecond: Double(slider.value))
+  }
+
+  private func toggleFavorite() {
+    guard let song = BlackboxNowPlaying.current().song, let account = song.account else { return }
+    Task { @MainActor in
+      try? await song.remoteToggleFavorite(syncer: appDelegateRef.getMeta(account.info).librarySyncer)
+      refresh()
+    }
+  }
+
+  func ratingView(_ ratingView: RatingView, didChangeRating rating: Int) {
+    guard let song = BlackboxNowPlaying.current().song, let account = song.account else { return }
+    song.rating = rating
+    Task { @MainActor in
+      try? await appDelegateRef.getMeta(account.info).librarySyncer.setRating(song: song, rating: rating)
+    }
+  }
+
+  private func showSheet(_ vc: UIViewController) {
+    let nav = UINavigationController(rootViewController: vc)
+    vc.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak nav] _ in
+      nav?.dismiss(animated: true)
+    })
+    if let sheet = nav.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+    }
+    present(nav, animated: true)
+  }
+
+  private func showDevices() {
+    let nav = UINavigationController(rootViewController: DevicePickerVC())
+    if let sheet = nav.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+    }
+    present(nav, animated: true)
+  }
+
+  private func showQuickSettings() {
+    let host = UIHostingController(rootView: BlackboxQuickSettingsView())
+    host.title = "Schnelleinstellungen"
+    showSheet(host)
+  }
+
+  // MARK: MusicPlayable
+  func didStartPlayingFromBeginning() { refresh() }
+  func didStartPlaying() { refresh() }
+  func didPause() { refresh() }
+  func didStopPlaying() { refresh() }
+  func didElapsedTimeChange() { if !RemoteSession.shared.isRemoteActive { refreshTime() } }
+  func didPlaylistChange() { refresh() }
+  func didArtworkChange() { lastArtworkKey = nil; refresh() }
+  func didShuffleChange() { refresh() }
+  func didRepeatChange() { refresh() }
+  func didPlaybackRateChange() {}
+}
+
+// MARK: - DevicePickerVC
+
+/// "Wiedergabe auf …": this iPhone, Blackbox FireTVs in the network, AirPlay/Bluetooth.
+final class DevicePickerVC: UITableViewController {
+  private let browser = FireTVBrowser()
+  private var devices: [FireTVBrowser.Device] = []
+  private var connecting: String?
+
+  init() { super.init(style: .insetGrouped) }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Wiedergabe auf"
+    navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in
+      self?.dismiss(animated: true)
+    })
+    tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+    browser.onChange = { [weak self] found in
+      self?.devices = found
+      self?.tableView.reloadData()
+    }
+    browser.start()
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    browser.stop()
+  }
+
+  override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+
+  override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    switch section {
+    case 0: return nil
+    case 1: return "Blackbox im Netzwerk"
+    default: return "AirPlay & Bluetooth"
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+    section == 1 ? "Solange ein FireTV gewählt ist, steuert das iPhone nur noch den FireTV – es spielt selbst nichts ab. Blackbox muss auf dem FireTV geöffnet sein." : nil
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    switch section {
+    case 0: return 1
+    case 1: return devices.count + 1
+    default: return 1
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+    var content = cell.defaultContentConfiguration()
+    cell.accessoryType = .none
+    cell.accessoryView = nil
+    let session = RemoteSession.shared
+    switch indexPath.section {
+    case 0:
+      content.text = UIDevice.current.userInterfaceIdiom == .pad ? "Dieses iPad" : "Dieses iPhone"
+      content.image = UIImage(systemName: UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone")
+      cell.accessoryType = session.isRemoteActive ? .none : .checkmark
+    case 1:
+      if indexPath.row < devices.count {
+        let d = devices[indexPath.row]
+        content.text = d.name
+        content.image = UIImage(systemName: "tv")
+        cell.accessoryType = session.deviceName == d.name ? .checkmark : .none
+        if connecting == d.name {
+          let spinner = UIActivityIndicatorView(style: .medium)
+          spinner.startAnimating()
+          cell.accessoryView = spinner
+        }
+      } else {
+        content.text = "IP-Adresse eingeben …"
+        content.image = UIImage(systemName: "keyboard")
+        if session.isRemoteActive, !devices.contains(where: { $0.name == session.deviceName }) {
+          content.secondaryText = "Verbunden: \(session.deviceName ?? "")"
+        }
+      }
+    default:
+      content.text = "AirPlay- oder Bluetooth-Gerät wählen"
+      let picker = AVRoutePickerView(frame: CGRect(x: 0, y: 0, width: 36, height: 36))
+      picker.tintColor = view.tintColor
+      cell.accessoryView = picker
+      content.image = UIImage(systemName: "airplayaudio")
+    }
+    cell.contentConfiguration = content
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    switch indexPath.section {
+    case 0:
+      RemoteSession.shared.disconnect()
+      tableView.reloadData()
+    case 1:
+      if indexPath.row < devices.count {
+        let d = devices[indexPath.row]
+        connecting = d.name
+        tableView.reloadData()
+        Task { @MainActor in
+          if let host = await FireTVBrowser.resolve(d.endpoint) {
+            RemoteSession.shared.connect(host: host, name: d.name)
+          }
+          connecting = nil
+          tableView.reloadData()
+        }
+      } else {
+        askForHost()
+      }
+    default:
+      // AVRoutePickerView handles the tap itself
+      if let picker = tableView.cellForRow(at: indexPath)?.accessoryView as? AVRoutePickerView {
+        picker.subviews.compactMap { $0 as? UIButton }.first?.sendActions(for: .touchUpInside)
+      }
+    }
+  }
+
+  private func askForHost() {
+    let alert = UIAlertController(title: "FireTV-Adresse", message: "Steht auf dem FireTV in Blackbox unter Einstellungen.", preferredStyle: .alert)
+    alert.addTextField {
+      $0.keyboardType = .numbersAndPunctuation
+      $0.text = FireTVClient.savedHost
+      $0.placeholder = "192.168.30.21"
+    }
+    alert.addAction(UIAlertAction(title: "Abbrechen", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Verbinden", style: .default) { [weak self, weak alert] _ in
+      guard let text = alert?.textFields?.first?.text, !text.isEmpty else { return }
+      RemoteSession.shared.connect(host: text, name: nil)
+      self?.tableView.reloadData()
+    })
+    present(alert, animated: true)
+  }
+}
+
+// MARK: - Quick settings (gear in the player)
+
+struct BlackboxQuickSettingsView: View {
+  private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  @State private var scrobble: Bool
+  @State private var replayGain: Bool
+  @State private var autoplay: Bool
+  @State private var syncQueue: Bool
+  @State private var wifi: StreamingMaxBitratePreference
+  @State private var cellular: StreamingMaxBitratePreference
+  @State private var resumeMessage: String?
+
+  @MainActor
+  init() {
+    let user = (UIApplication.shared.delegate as! AppDelegate).storage.settings.user
+    _scrobble = State(initialValue: user.isScrobbleStreamedItems)
+    _replayGain = State(initialValue: user.isReplayGainEnabled)
+    _autoplay = State(initialValue: user.isAutoplayEnabled)
+    _syncQueue = State(initialValue: PlayQueueSync.isEnabled)
+    _wifi = State(initialValue: user.streamingMaxBitrateWifiPreference)
+    _cellular = State(initialValue: user.streamingMaxBitrateCellularPreference)
+  }
+
+  private func applyBitrates() {
+    delegate.storage.settings.user.streamingMaxBitrateWifiPreference = wifi
+    delegate.storage.settings.user.streamingMaxBitrateCellularPreference = cellular
+    delegate.player.setStreamingMaxBitrates(to: StreamingMaxBitrates(wifi: wifi, cellular: cellular))
+  }
+
+  var body: some View {
+    Form {
+      Section {
+        Toggle("Scrobbeln", isOn: $scrobble)
+          .onChange(of: scrobble) { _, v in delegate.storage.settings.user.isScrobbleStreamedItems = v }
+      } footer: {
+        Text("Gestreamte Titel an den Server melden (Wiedergabezähler, Rückblicke).")
+      }
+      Section {
+        Toggle("ReplayGain", isOn: $replayGain)
+          .onChange(of: replayGain) { _, v in delegate.storage.settings.user.isReplayGainEnabled = v }
+      } footer: {
+        Text("Lautstärke anhand der Metadaten angleichen.")
+      }
+      Section {
+        Toggle("Fortlaufende Wiedergabe", isOn: $autoplay)
+          .onChange(of: autoplay) { _, v in delegate.storage.settings.user.isAutoplayEnabled = v }
+      } footer: {
+        Text("Wenn die Warteschlange endet, laufen ähnliche Titel weiter (Radio).")
+      }
+      Section {
+        Toggle("Wiedergabeliste geräteübergreifend synchronisieren", isOn: $syncQueue)
+          .onChange(of: syncQueue) { _, v in PlayQueueSync.isEnabled = v }
+        Button("Wiedergabe von anderem Gerät fortsetzen") {
+          Task { @MainActor in resumeMessage = await PlayQueueSync.resume() }
+        }
+        if let resumeMessage { Text(resumeMessage).font(.footnote).foregroundStyle(.secondary) }
+      } footer: {
+        Text("Speichert Warteschlange und Position auf dem Server (auch der FireTV nutzt das), damit du auf einem anderen Gerät weiterhören kannst.")
+      }
+      Section("Transcoding") {
+        Picker("WLAN", selection: $wifi) {
+          ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { Text($0.description).tag($0) }
+        }
+        .onChange(of: wifi) { _, _ in applyBitrates() }
+        Picker("Mobilfunk", selection: $cellular) {
+          ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { Text($0.description).tag($0) }
+        }
+        .onChange(of: cellular) { _, _ in applyBitrates() }
+      }
+    }
+  }
+}
+
+// MARK: - PlayQueueSync
+
+/// Saves the play queue on the server (Subsonic savePlayQueue) and resumes it on another device.
+@MainActor
+final class PlayQueueSync: MusicPlayable {
+  static let shared = PlayQueueSync()
+  private static let key = "blackbox.syncPlayQueue"
+  private var lastSave = Date.distantPast
+  private var registered = false
+  private var appDelegateRef: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  static var isEnabled: Bool {
+    get { UserDefaults.standard.bool(forKey: key) }
+    set {
+      UserDefaults.standard.set(newValue, forKey: key)
+      if newValue { shared.start(); shared.save(force: true) }
+    }
+  }
+
+  func start() {
+    guard !registered else { return }
+    registered = true
+    appDelegateRef.player.addNotifier(notifier: self)
+  }
+
+  private var api: BackendProxy? {
+    guard let info = appDelegateRef.storage.settings.accounts.active else { return nil }
+    return appDelegateRef.getMeta(info).backendApi
+  }
+
+  func save(force: Bool = false) {
+    guard Self.isEnabled, !RemoteSession.shared.isRemoteActive else { return }
+    guard force || Date().timeIntervalSince(lastSave) > 15 else { return }
+    let player = appDelegateRef.player
+    guard let current = player.currentlyPlaying, let api else { return }
+    lastSave = Date()
+    let prev = player.getAllPrevQueueItems().suffix(100)
+    let next = player.getAllUserQueueItems() + player.getAllNextQueueItems()
+    let ids = prev.map(\.id) + [current.id] + next.prefix(300).map(\.id)
+    var query = ids.map { URLQueryItem(name: "id", value: $0) }
+    query.append(URLQueryItem(name: "current", value: current.id))
+    query.append(URLQueryItem(name: "position", value: String(Int(player.elapsedTime * 1000))))
+    Task {
+      guard let url = try? await api.generateUrl(forAction: "savePlayQueue", query: query) else { return }
+      var req = URLRequest(url: url)
+      for (k, v) in api.httpHeaders { req.setValue(v, forHTTPHeaderField: k) }
+      _ = try? await URLSession.shared.data(for: req)
+    }
+  }
+
+  /// Loads the queue saved by another device and plays it here (or on the connected FireTV).
+  static func resume() async -> String {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    guard let info = delegate.storage.settings.accounts.active else { return "Kein Konto aktiv." }
+    let api = delegate.getMeta(info).backendApi
+    guard let url = try? await api.generateUrl(forAction: "getPlayQueue", query: [URLQueryItem(name: "f", value: "json")]) else {
+      return "Vom Server nicht unterstützt."
+    }
+    var req = URLRequest(url: url)
+    for (k, v) in api.httpHeaders { req.setValue(v, forHTTPHeaderField: k) }
+    guard let result = try? await URLSession.shared.data(for: req),
+          let json = try? JSONSerialization.jsonObject(with: result.0) as? [String: Any],
+          let response = json["subsonic-response"] as? [String: Any],
+          let queue = response["playQueue"] as? [String: Any],
+          let entries = queue["entry"] as? [[String: Any]], !entries.isEmpty
+    else { return "Keine gespeicherte Wiedergabeliste gefunden." }
+    let account = delegate.storage.main.library.getAccount(info: info)
+    let songs = entries.compactMap { $0["id"] as? String }.compactMap {
+      delegate.storage.main.library.getSong(for: account, id: $0)
+    }
+    guard !songs.isEmpty else { return "Die Titel sind in der Mediathek noch nicht synchronisiert." }
+    let current = queue["current"].map { "\($0)" }
+    let index = songs.firstIndex(where: { $0.id == current }) ?? 0
+    let position = (queue["position"] as? Double ?? Double(queue["position"] as? Int ?? 0)) / 1000
+    delegate.player.play(context: PlayContext(name: "Fortgesetzt", index: index, playables: songs))
+    if position > 1 {
+      try? await Task.sleep(nanoseconds: 700_000_000)
+      delegate.player.seek(toSecond: position)
+    }
+    let by = (queue["changedBy"] as? String).map { " (von \($0))" } ?? ""
+    return "Fortgesetzt: \(songs[index].title)\(by)"
+  }
+
+  func didStartPlayingFromBeginning() { save(force: true) }
+  func didStartPlaying() {}
+  func didPause() { save(force: true) }
+  func didStopPlaying() {}
+  func didElapsedTimeChange() { save() }
+  func didPlaylistChange() { save(force: true) }
+  func didArtworkChange() {}
+  func didShuffleChange() {}
+  func didRepeatChange() {}
+  func didPlaybackRateChange() {}
+}
+
+// MARK: - Cover colored background for album / playlist details (Blackbox)
+
+final class CoverGradientBackgroundView: UIView {
+  private let gradient = CAGradientLayer()
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    backgroundColor = .systemBackground
+    layer.addSublayer(gradient)
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    gradient.frame = bounds
+  }
+
+  func apply(color: UIColor?) {
+    guard let color else {
+      gradient.colors = nil
+      return
+    }
+    gradient.colors = [
+      color.withAlphaComponent(0.75).cgColor,
+      color.withAlphaComponent(0.35).cgColor,
+      UIColor.clear.cgColor,
+    ]
+    gradient.locations = [0, 0.45, 1]
+  }
+}
+
+extension UITableViewController {
+  /// Background with the colors of the cover (like the player)
+  func applyBlackboxCoverBackground(for container: PlayableContainable) {
+    let bg = (tableView.backgroundView as? CoverGradientBackgroundView) ?? CoverGradientBackgroundView()
+    tableView.backgroundView = bg
+    tableView.backgroundColor = .clear
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    func setColor(from image: UIImage?) {
+      guard let image, let colors = try? image.dominantColors(max: 1), let c = colors.first else { return }
+      UIView.transition(with: bg, duration: 0.3, options: .transitionCrossDissolve) { bg.apply(color: c) }
+    }
+    if let playlist = container as? Playlist,
+       let coverArtId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id),
+       let info = playlist.account?.info {
+      Task { @MainActor in
+        setColor(from: await PlaylistCoverLoader.shared.image(coverArtId: coverArtId, accountInfo: info))
+      }
+      return
+    }
+    let entity: AbstractLibraryEntity? = (container as? AbstractLibraryEntity) ?? (container.playables.first as AbstractLibraryEntity?)
+    guard let entity, let info = entity.account?.info else { return }
+    let setting = delegate.storage.settings.accounts.getSetting(info).read
+    setColor(from: LibraryEntityImage.getImageToDisplayImmediately(
+      libraryEntity: entity,
+      themePreference: setting.themePreference,
+      artworkDisplayPreference: setting.artworkDisplayPreference,
+      useCache: false
+    ))
   }
 }

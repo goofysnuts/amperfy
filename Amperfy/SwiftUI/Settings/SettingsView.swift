@@ -199,10 +199,6 @@ struct BlackboxSettingsSections: View {
               let presenter = topViewController() else { return }
         HomeVC.presentSectionEditor(from: presenter, accountInfo: active)
       }
-      Button("FireTV fernsteuern") {
-        let nav = UINavigationController(rootViewController: FireTVRemoteVC())
-        topViewController()?.present(nav, animated: true)
-      }
     }, footer: "Ohne eigene Akzentfarbe gilt die Theme-Farbe des Kontos.", header: "Blackbox")
 
     SettingsSection(content: {

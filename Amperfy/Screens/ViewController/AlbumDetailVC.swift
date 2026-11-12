@@ -124,6 +124,7 @@ class AlbumDetailVC: SingleSnapshotFetchedResultsTableViewController<SongMO> {
       EntityPreviewActionBuilder(container: self.album, on: self).createMenuActions()
     }
     navigationItem.rightBarButtonItem = optionsButton
+    applyBlackboxCoverBackground(for: album)
 
     containableAtIndexPathCallback = { indexPath in
       self.fetchedResultsController.getWrappedEntity(at: indexPath)
@@ -191,6 +192,7 @@ class AlbumDetailVC: SingleSnapshotFetchedResultsTableViewController<SongMO> {
   )
     -> UITableViewCell {
     let cell: PlayableTableCell = dequeueCell(for: tableView, at: indexPath)
+    cell.backgroundColor = .clear
     cell.display(
       playable: song,
       playContextCb: convertCellViewToPlayContext,

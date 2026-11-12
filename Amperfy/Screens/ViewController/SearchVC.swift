@@ -48,14 +48,14 @@ class SearchDiffableDataSource: BasicUITableViewDiffableDataSource {
       if searchVC.searchHistory.isEmpty {
         return ""
       } else {
-        return "Recently Searched"
+        return "Zuletzt gesucht"
       }
     case .Playlist:
       return "Playlists"
     case .Artist:
-      return "Artists"
+      return "Interpreten"
     case .Album:
-      return "Albums"
+      return "Alben"
     case .Song:
       return "Songs"
     case .none:
@@ -81,7 +81,105 @@ class SearchVC: BasicTableViewController {
 
   private var userButton: UIButton?
   private var userBarButtonItem: UIBarButtonItem?
-  private var isSearchActive = false
+  private var isSearchActive = false {
+    didSet { if oldValue != isSearchActive { refreshCategoryBar() } }
+  }
+
+  // MARK: Blackbox: search categories (Top-Treffer, Interpreten, Alben, Songs, Playlists)
+
+  enum SearchCategory: Int, CaseIterable {
+    case top, artists, albums, songs, playlists
+
+    var title: String {
+      switch self {
+      case .top: return "Top-Treffer"
+      case .artists: return "Interpreten"
+      case .albums: return "Alben"
+      case .songs: return "Songs"
+      case .playlists: return "Playlists"
+      }
+    }
+
+    var section: SearchSection? {
+      switch self {
+      case .top: return nil
+      case .artists: return .Artist
+      case .albums: return .Album
+      case .songs: return .Song
+      case .playlists: return .Playlist
+      }
+    }
+  }
+
+  static let topHitsLimit = 4
+  private var category: SearchCategory = .top
+  private var categoryButtons: [UIButton] = []
+  private lazy var categoryBar: UIView = {
+    let scroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 52))
+    scroll.showsHorizontalScrollIndicator = false
+    let stack = UIStackView()
+    stack.axis = .horizontal
+    stack.spacing = 8
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    scroll.addSubview(stack)
+    NSLayoutConstraint.activate([
+      stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16),
+      stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -16),
+      stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 8),
+      stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -8),
+      stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor, constant: -16),
+    ])
+    for cat in SearchCategory.allCases {
+      let button = UIButton(type: .system)
+      button.addAction(UIAction { [weak self] _ in self?.select(category: cat) }, for: .touchUpInside)
+      categoryButtons.append(button)
+      stack.addArrangedSubview(button)
+    }
+    return scroll
+  }()
+
+  private func styleCategoryButtons() {
+    for (i, button) in categoryButtons.enumerated() {
+      let selected = i == category.rawValue
+      var config = selected ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
+      config.title = SearchCategory(rawValue: i)?.title
+      config.cornerStyle = .capsule
+      config.baseForegroundColor = selected ? .white : .secondaryLabel
+      config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attrs in
+        var a = attrs
+        a.font = UIFont.preferredFont(forTextStyle: .headline)
+        return a
+      }
+      button.configuration = config
+      button.accessibilityTraits = selected ? [.button, .selected] : .button
+    }
+  }
+
+  private func refreshCategoryBar() {
+    guard isViewLoaded else { return }
+    if isSearchActive {
+      styleCategoryButtons()
+      categoryBar.frame.size.height = 52
+      tableView.tableHeaderView = categoryBar
+    } else {
+      tableView.tableHeaderView = nil
+    }
+  }
+
+  private func select(category newCategory: SearchCategory) {
+    category = newCategory
+    styleCategoryButtons()
+    updateDataSource(animated: false, reloadingSections: [.Artist, .Album, .Song, .Playlist])
+    tableView.setContentOffset(CGPoint(x: 0, y: -tableView.adjustedContentInset.top), animated: false)
+  }
+
+  /// items shown for a result section with the current category
+  fileprivate func visibleCount(_ section: SearchSection, total: Int) -> Int {
+    switch category {
+    case .top: return min(total, Self.topHitsLimit)
+    default: return category.section == section ? total : 0
+    }
+  }
   private var accountObjectId: NSManagedObjectID?
   private let account: Account
   private var accountNotificationHandler: AccountNotificationHandler?
@@ -122,19 +220,19 @@ class SearchVC: BasicTableViewController {
       toSection: SearchSection.History.rawValue
     )
     snapshot.appendItems(
-      artists.compactMap { $0.managedObject.objectID },
+      artists.prefix(visibleCount(.Artist, total: artists.count)).compactMap { $0.managedObject.objectID },
       toSection: SearchSection.Artist.rawValue
     )
     snapshot.appendItems(
-      albums.compactMap { $0.managedObject.objectID },
+      albums.prefix(visibleCount(.Album, total: albums.count)).compactMap { $0.managedObject.objectID },
       toSection: SearchSection.Album.rawValue
     )
     snapshot.appendItems(
-      playlists.compactMap { $0.managedObject.objectID },
+      playlists.prefix(visibleCount(.Playlist, total: playlists.count)).compactMap { $0.managedObject.objectID },
       toSection: SearchSection.Playlist.rawValue
     )
     snapshot.appendItems(
-      songs.compactMap { $0.managedObject.objectID },
+      songs.prefix(visibleCount(.Song, total: songs.count)).compactMap { $0.managedObject.objectID },
       toSection: SearchSection.Song.rawValue
     )
     snapshot.reloadSections(reloadingSections.map(\.rawValue))
@@ -398,6 +496,27 @@ class SearchVC: BasicTableViewController {
     viewForHeaderInSection section: Int
   )
     -> UIView? {
+    // Blackbox: "Mehr anzeigen …" in the result sections of the top hits
+    if isSearchActive, category == .top, let searchSection = SearchSection(rawValue: section),
+       searchSection != .History {
+      let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
+      var content = header.defaultContentConfiguration()
+      content.text = tableView.dataSource?.tableView?(tableView, titleForHeaderInSection: section)
+      content.textProperties.font = UIFont.preferredFont(forTextStyle: .title3).withBoldTrait()
+      content.textProperties.color = .label
+      header.contentConfiguration = content
+      let target = SearchCategory.allCases.first { $0.section == searchSection }
+      let more = UIButton(type: .system, primaryAction: UIAction(title: "Mehr anzeigen …") { [weak self] _ in
+        if let target { self?.select(category: target) }
+      })
+      more.translatesAutoresizingMaskIntoConstraints = false
+      header.contentView.addSubview(more)
+      NSLayoutConstraint.activate([
+        more.trailingAnchor.constraint(equalTo: header.contentView.layoutMarginsGuide.trailingAnchor),
+        more.centerYAnchor.constraint(equalTo: header.contentView.centerYAnchor),
+      ])
+      return header
+    }
     // nil: default header for all other sections
     guard SearchSection(rawValue: section) == .History, !isSearchActive,
           !searchHistory.isEmpty else { return nil }
@@ -433,16 +552,16 @@ class SearchVC: BasicTableViewController {
     case .History:
       return !isSearchActive ? CommonScreenOperations.tableSectionHeightLarge : 0
     case .Playlist:
-      return (isSearchActive && !playlists.isEmpty) ? CommonScreenOperations
+      return (isSearchActive && visibleCount(.Playlist, total: playlists.count) > 0) ? CommonScreenOperations
         .tableSectionHeightLarge : 0
     case .Artist:
-      return (isSearchActive && !artists.isEmpty) ? CommonScreenOperations
+      return (isSearchActive && visibleCount(.Artist, total: artists.count) > 0) ? CommonScreenOperations
         .tableSectionHeightLarge : 0
     case .Album:
-      return (isSearchActive && !albums.isEmpty) ? CommonScreenOperations
+      return (isSearchActive && visibleCount(.Album, total: albums.count) > 0) ? CommonScreenOperations
         .tableSectionHeightLarge : 0
     case .Song:
-      return (isSearchActive && !songs.isEmpty) ? CommonScreenOperations.tableSectionHeightLarge : 0
+      return (isSearchActive && visibleCount(.Song, total: songs.count) > 0) ? CommonScreenOperations.tableSectionHeightLarge : 0
     case .none:
       return 0.0
     }
@@ -736,4 +855,11 @@ class SearchVC: BasicTableViewController {
     config.secondaryText = "Your search history will appear here."
     return config
   }()
+}
+
+extension UIFont {
+  fileprivate func withBoldTrait() -> UIFont {
+    guard let d = fontDescriptor.withSymbolicTraits(.traitBold) else { return self }
+    return UIFont(descriptor: d, size: 0)
+  }
 }

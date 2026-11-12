@@ -118,7 +118,13 @@ enum AppStoryboard: String {
   }
 
   func segueToPodcasts(account: Account) -> UIViewController { PodcastsVC(account: account) }
-  func segueToPlaylists(account: Account) -> UIViewController { PlaylistsVC(account: account) }
+  func segueToPlaylists(account: Account) -> UIViewController {
+    PlaylistsVC(account: account, spotifyFilter: .excludeSpotify)
+  }
+
+  func segueToSpotifyPlaylists(account: Account) -> UIViewController {
+    PlaylistsVC(account: account, spotifyFilter: .onlySpotify)
+  }
   func segueToArtists(account: Account) -> UIViewController { ArtistsVC(account: account) }
   func segueToFavoriteArtists(account: Account)
     -> UIViewController { let artistsVC = ArtistsVC(account: account)

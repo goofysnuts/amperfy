@@ -906,16 +906,19 @@ public class PlaylistItemsFetchedResultsController: BasicFetchedResultsControlle
 public class PlaylistFetchedResultsController: BasicFetchedResultsController<PlaylistMO> {
   public private(set) var sortType: PlaylistSortType
   private let account: Account
+  private let spotifyFilter: SpotifyPlaylistFilter
 
   public init(
     coreDataCompanion: CoreDataCompanion,
     account: Account,
     sortType: PlaylistSortType,
     isGroupedInAlphabeticSections: Bool,
-    fetchLimit: Int? = nil
+    fetchLimit: Int? = nil,
+    spotifyFilter: SpotifyPlaylistFilter = .all
   ) {
     self.account = account
     self.sortType = sortType
+    self.spotifyFilter = spotifyFilter
     var fetchRequest = PlaylistMO.alphabeticSortedFetchRequest
     switch sortType {
     case .name:
@@ -928,10 +931,14 @@ public class PlaylistFetchedResultsController: BasicFetchedResultsController<Pla
       fetchRequest = PlaylistMO.durationFetchRequest
     }
     fetchRequest.fetchLimit = fetchLimit ?? 0
-    fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+    var subpredicates: [NSPredicate] = [
       coreDataCompanion.library.getFetchPredicate(forAccount: account),
       PlaylistMO.excludeSystemPlaylistsFetchPredicate,
-    ])
+    ]
+    if let spotifyPredicate = SpotifyPlaylistRegistry.predicate(for: spotifyFilter) {
+      subpredicates.append(spotifyPredicate)
+    }
+    fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: subpredicates)
     fetchRequest.relationshipKeyPathsForPrefetching = PlaylistMO.relationshipKeyPathsForPrefetching
     fetchRequest.returnsObjectsAsFaults = false
     super.init(
@@ -943,11 +950,14 @@ public class PlaylistFetchedResultsController: BasicFetchedResultsController<Pla
 
   public func search(searchText: String, playlistSearchCategory: PlaylistSearchCategory) {
     if !searchText.isEmpty || playlistSearchCategory != .defaultValue {
-      let predicate = coreDataCompanion.library.getSearchPlaylistsPredicate(
+      var predicate = coreDataCompanion.library.getSearchPlaylistsPredicate(
         for: account,
         searchText: searchText,
         playlistSearchCategory: playlistSearchCategory
       )
+      if let spotifyPredicate = SpotifyPlaylistRegistry.predicate(for: spotifyFilter) {
+        predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, spotifyPredicate])
+      }
       search(predicate: predicate)
     } else {
       showAllResults()

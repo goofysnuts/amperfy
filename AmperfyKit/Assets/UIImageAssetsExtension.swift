@@ -206,6 +206,7 @@ public struct AmperfyImage: Sendable {
   public static let playMenu = Self("play")
   public static let playbackRate = Self("gauge.open.with.lines.needle.33percent")
   public static let playlist = Self("music.note.list")
+  public static let importedPlaylist = Self("square.and.arrow.down.on.square")
   public static let playlistDisplayStyle = Self("list.bullet")
   public static let playlistPlus = Self("text.badge.plus")
   public static let playlistX = Self("text.badge.xmark")
@@ -348,6 +349,8 @@ extension UIImage {
   public static let playMenu = UIImage.create(systemName: AmperfyImage.playMenu.systemName)
   public static let playbackRate = UIImage.create(systemName: AmperfyImage.playbackRate.systemName)
   public static let playlist = UIImage.create(systemName: AmperfyImage.playlist.systemName)
+  public static let importedPlaylist = UIImage
+    .create(systemName: AmperfyImage.importedPlaylist.systemName)
   public static let playlistDisplayStyle = UIImage
     .create(systemName: AmperfyImage.playlistDisplayStyle.systemName)
   public static let playlistPlus = UIImage.create(systemName: AmperfyImage.playlistPlus.systemName)

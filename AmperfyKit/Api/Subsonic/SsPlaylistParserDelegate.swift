@@ -29,6 +29,8 @@ class SsPlaylistParserDelegate: SsXmlParser {
   private let allOldPlaylists: Set<Playlist>
   private var playlistsDict: [String: Playlist]
   private var parsedPlaylists: Set<Playlist>
+  /// FireSonic: ids of playlists imported from Spotify (marked in the comment)
+  private var spotifyPlaylistIds = Set<String>()
   private let account: Account
   private let library: LibraryStorage
 
@@ -82,6 +84,10 @@ class SsPlaylistParserDelegate: SsXmlParser {
 
       playlist?.name = attributePlaylistName
 
+      if SpotifyPlaylistRegistry.isSpotifyImport(comment: attributeDict["comment"]) {
+        spotifyPlaylistIds.insert(playlistId)
+      }
+
       if let attributeDuration = attributeDict["duration"], let duration = Int(attributeDuration) {
         playlist?.remoteDuration = duration
       }
@@ -106,6 +112,7 @@ class SsPlaylistParserDelegate: SsXmlParser {
       }
       playlist = nil
     case "playlists":
+      SpotifyPlaylistRegistry.replace(ids: spotifyPlaylistIds)
       let outdatedPlaylists = allOldPlaylists.subtracting(parsedPlaylists)
       outdatedPlaylists.forEach {
         if $0.id != "" {

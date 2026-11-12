@@ -43,6 +43,7 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
   case newestAlbums = 12
   case recentAlbums = 13
   case radios = 14
+  case spotifyPlaylists = 15
 
   public static func createByDisplayName(name: String) -> LibraryDisplayType? {
     .allCases.first {
@@ -80,6 +81,8 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
       return "Recently Played Albums"
     case .radios:
       return "Radios"
+    case .spotifyPlaylists:
+      return "Spotify Playlists"
     }
   }
 
@@ -113,6 +116,8 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
       return UIImage.albumRecent
     case .radios:
       return UIImage.radio
+    case .spotifyPlaylists:
+      return UIImage.importedPlaylist
     }
   }
 }
@@ -156,9 +161,17 @@ public struct LibraryDisplaySettings: Sendable, Codable {
     }
 
     if mapped.count == 2 {
-      let order = decodedOrder?.compactMap { LibraryDisplayType(rawValue: $0) } ?? mapped[0] +
+      var order = decodedOrder?.compactMap { LibraryDisplayType(rawValue: $0) } ?? mapped[0] +
         mapped[1]
-      self = LibraryDisplaySettings(order: order, inUse: Set(mapped[0]))
+      var inUse = Set(mapped[0])
+      // FireSonic: "Spotify Playlists" was added later. Settings stored before that
+      // don't know the type yet -> show it once, right after "Playlists".
+      if !order.contains(.spotifyPlaylists) {
+        let insertAt = (order.firstIndex(of: .playlists).map { $0 + 1 }) ?? order.count
+        order.insert(.spotifyPlaylists, at: insertAt)
+        inUse.insert(.spotifyPlaylists)
+      }
+      self = LibraryDisplaySettings(order: order, inUse: inUse)
     } else if let first = mapped.first {
       // If only one group present, treat it as inUse and compute notUsed
       self = LibraryDisplaySettings(inUse: first)
@@ -196,6 +209,7 @@ public struct LibraryDisplaySettings: Sendable, Codable {
         .favoriteSongs,
         .directories,
         .playlists,
+        .spotifyPlaylists,
         .podcasts,
         .radios,
       ]
@@ -218,5 +232,58 @@ public struct LibraryDisplaySettings: Sendable, Codable {
         .playlists,
       ]
     )
+  }
+}
+
+// MARK: - SpotifyPlaylistFilter
+
+/// FireSonic: playlists imported by the Navidrome "Spotify Playlist Import" plugin get
+/// their own library section instead of being listed under "Playlists".
+public enum SpotifyPlaylistFilter: Sendable {
+  case all
+  case excludeSpotify
+  case onlySpotify
+}
+
+// MARK: - SpotifyPlaylistRegistry
+
+/// Remembers which playlists were imported from Spotify. The plugin marks them in the
+/// playlist comment ("[spotify:<id>]" or "Spotify-Import: … open.spotify.com/playlist/…"),
+/// which is read while syncing the playlist list (getPlaylists).
+public enum SpotifyPlaylistRegistry {
+  private static let storageKey = "firesonic.spotifyPlaylistIds"
+  public static let changedNotification = Notification
+    .Name(rawValue: "de.jannes.firesonic.spotifyPlaylistsChanged")
+
+  public static func isSpotifyImport(comment: String?) -> Bool {
+    guard let comment, !comment.isEmpty else { return false }
+    return comment.contains("[spotify:") ||
+      comment.hasPrefix("Spotify-Import:") ||
+      comment.contains("open.spotify.com/playlist/")
+  }
+
+  public static var ids: Set<String> {
+    Set(UserDefaults.standard.stringArray(forKey: storageKey) ?? [])
+  }
+
+  /// Replaces the stored ids with the ones found in the latest playlist sync.
+  public static func replace(ids newIds: Set<String>) {
+    guard newIds != ids else { return }
+    UserDefaults.standard.set(newIds.sorted(), forKey: storageKey)
+    DispatchQueue.main.async {
+      NotificationCenter.default.post(name: changedNotification, object: nil)
+    }
+  }
+
+  public static func predicate(for filter: SpotifyPlaylistFilter) -> NSPredicate? {
+    let current = Array(ids)
+    switch filter {
+    case .all:
+      return nil
+    case .excludeSpotify:
+      return NSPredicate(format: "NOT (%K IN %@)", "id", current)
+    case .onlySpotify:
+      return NSPredicate(format: "%K IN %@", "id", current)
+    }
   }
 }

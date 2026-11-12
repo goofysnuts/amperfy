@@ -94,6 +94,60 @@ open class EntityImageView: UIView {
       collection: container.getArtworkCollection(theme: theme),
       cornerRadius: cornerRadius
     )
+    displayServerCoverIfAvailable(container: container)
+  }
+
+  // MARK: FireSonic – playlist covers from the server (Navidrome)
+
+  private var coverOverlay: UIImageView?
+  private var coverRequestKey: String?
+
+  private func hideCoverOverlay() {
+    coverRequestKey = nil
+    coverOverlay?.isHidden = true
+    coverOverlay?.image = nil
+  }
+
+  private func showCoverOverlay(_ image: UIImage) {
+    let overlay: UIImageView
+    if let coverOverlay {
+      overlay = coverOverlay
+    } else {
+      overlay = UIImageView(frame: bounds)
+      overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      overlay.contentMode = .scaleAspectFill
+      overlay.clipsToBounds = true
+      overlay.isUserInteractionEnabled = false
+      addSubview(overlay)
+      coverOverlay = overlay
+    }
+    bringSubviewToFront(overlay)
+    overlay.image = image
+    overlay.isHidden = false
+  }
+
+  private func displayServerCoverIfAvailable(container: PlayableContainable) {
+    guard let playlist = container as? Playlist,
+          let accountInfo = playlist.account?.info,
+          let coverArtId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
+    else {
+      hideCoverOverlay()
+      return
+    }
+    let loader = PlaylistCoverLoader.shared
+    if let cached = loader.cachedImage(coverArtId: coverArtId) {
+      coverRequestKey = coverArtId
+      showCoverOverlay(cached)
+      return
+    }
+    hideCoverOverlay()
+    coverRequestKey = coverArtId
+    Task { @MainActor [weak self] in
+      guard let image = await loader.image(coverArtId: coverArtId, accountInfo: accountInfo)
+      else { return }
+      guard let self, self.coverRequestKey == coverArtId else { return }
+      self.showCoverOverlay(image)
+    }
   }
 
   public func configureStyling(
@@ -102,6 +156,7 @@ open class EntityImageView: UIView {
     imageTintColor: UIColor,
     backgroundColor: UIColor
   ) {
+    hideCoverOverlay()
     singleImage.tintColor = imageTintColor
     view.backgroundColor = backgroundColor
     view.layoutMargins = UIEdgeInsets(
@@ -149,5 +204,79 @@ open class EntityImageView: UIView {
     } else {
       singleImage.display(artworkType: collection.defaultArtworkType)
     }
+  }
+}
+
+// MARK: - PlaylistCoverLoader
+
+/// FireSonic: loads playlist covers (getCoverArt with the playlist's coverArt id) and caches
+/// them in memory and in the caches directory. Navidrome changes the coverArt id when the
+/// image changes, so the id is a safe cache key.
+@MainActor
+public final class PlaylistCoverLoader {
+  public static let shared = PlaylistCoverLoader()
+
+  private let memory = NSCache<NSString, UIImage>()
+  private var running = [String: Task<UIImage?, Never>]()
+  private var failed = [String: Date]()
+
+  private lazy var directory: URL = {
+    let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    let dir = base.appendingPathComponent("FireSonicPlaylistCovers", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }()
+
+  private func fileURL(coverArtId: String) -> URL {
+    let safe = coverArtId.map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
+    return directory.appendingPathComponent(String(safe) + ".img")
+  }
+
+  public func cachedImage(coverArtId: String) -> UIImage? {
+    if let image = memory.object(forKey: coverArtId as NSString) { return image }
+    if let data = try? Data(contentsOf: fileURL(coverArtId: coverArtId)),
+       let image = UIImage(data: data) {
+      memory.setObject(image, forKey: coverArtId as NSString)
+      return image
+    }
+    return nil
+  }
+
+  public func image(coverArtId: String, accountInfo: AccountInfo) async -> UIImage? {
+    if let cached = cachedImage(coverArtId: coverArtId) { return cached }
+    if let failedAt = failed[coverArtId], Date().timeIntervalSince(failedAt) < 300 { return nil }
+    if let task = running[coverArtId] { return await task.value }
+
+    let api = AmperKit.shared.getMeta(accountInfo).backendApi
+    let target = fileURL(coverArtId: coverArtId)
+    let task = Task<UIImage?, Never> {
+      guard let url = try? await api.generateUrl(forArtworkId: coverArtId) else { return nil }
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+      var items = components?.queryItems ?? []
+      if !items.contains(where: { $0.name == "size" }) {
+        items.append(URLQueryItem(name: "size", value: "600"))
+        components?.queryItems = items
+      }
+      var request = URLRequest(url: components?.url ?? url)
+      request.timeoutInterval = 30
+      for (key, value) in api.httpHeaders {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
+      guard let result = try? await URLSession.shared.data(for: request) else { return nil }
+      let data = result.0
+      let statusCode = (result.1 as? HTTPURLResponse)?.statusCode ?? 200
+      guard statusCode < 300, let image = UIImage(data: data) else { return nil }
+      try? data.write(to: target, options: .atomic)
+      return await image.byPreparingForDisplay() ?? image
+    }
+    running[coverArtId] = task
+    let image = await task.value
+    running[coverArtId] = nil
+    if let image {
+      memory.setObject(image, forKey: coverArtId as NSString)
+    } else {
+      failed[coverArtId] = Date()
+    }
+    return image
   }
 }

@@ -43,6 +43,8 @@ extension LibraryDisplayType {
       return AppStoryboard.Main.segueToPlaylists(account: account)
     case .spotifyPlaylists:
       return AppStoryboard.Main.segueToSpotifyPlaylists(account: account)
+    case .ownMixes:
+      return AppStoryboard.Main.segueToOwnMixes(account: account)
     case .podcasts:
       return AppStoryboard.Main.segueToPodcasts(account: account)
     case .downloads:

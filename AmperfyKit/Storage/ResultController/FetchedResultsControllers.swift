@@ -906,7 +906,7 @@ public class PlaylistItemsFetchedResultsController: BasicFetchedResultsControlle
 public class PlaylistFetchedResultsController: BasicFetchedResultsController<PlaylistMO> {
   public private(set) var sortType: PlaylistSortType
   private let account: Account
-  private let spotifyFilter: SpotifyPlaylistFilter
+  private let categoryFilter: PlaylistCategoryFilter
 
   public init(
     coreDataCompanion: CoreDataCompanion,
@@ -914,11 +914,11 @@ public class PlaylistFetchedResultsController: BasicFetchedResultsController<Pla
     sortType: PlaylistSortType,
     isGroupedInAlphabeticSections: Bool,
     fetchLimit: Int? = nil,
-    spotifyFilter: SpotifyPlaylistFilter = .all
+    categoryFilter: PlaylistCategoryFilter = .all
   ) {
     self.account = account
     self.sortType = sortType
-    self.spotifyFilter = spotifyFilter
+    self.categoryFilter = categoryFilter
     var fetchRequest = PlaylistMO.alphabeticSortedFetchRequest
     switch sortType {
     case .name:
@@ -935,8 +935,8 @@ public class PlaylistFetchedResultsController: BasicFetchedResultsController<Pla
       coreDataCompanion.library.getFetchPredicate(forAccount: account),
       PlaylistMO.excludeSystemPlaylistsFetchPredicate,
     ]
-    if let spotifyPredicate = SpotifyPlaylistRegistry.predicate(for: spotifyFilter) {
-      subpredicates.append(spotifyPredicate)
+    if let categoryPredicate = PlaylistCategoryRegistry.predicate(for: categoryFilter) {
+      subpredicates.append(categoryPredicate)
     }
     fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: subpredicates)
     fetchRequest.relationshipKeyPathsForPrefetching = PlaylistMO.relationshipKeyPathsForPrefetching
@@ -955,8 +955,8 @@ public class PlaylistFetchedResultsController: BasicFetchedResultsController<Pla
         searchText: searchText,
         playlistSearchCategory: playlistSearchCategory
       )
-      if let spotifyPredicate = SpotifyPlaylistRegistry.predicate(for: spotifyFilter) {
-        predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, spotifyPredicate])
+      if let categoryPredicate = PlaylistCategoryRegistry.predicate(for: categoryFilter) {
+        predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, categoryPredicate])
       }
       search(predicate: predicate)
     } else {

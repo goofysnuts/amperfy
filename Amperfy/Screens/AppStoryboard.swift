@@ -119,11 +119,15 @@ enum AppStoryboard: String {
 
   func segueToPodcasts(account: Account) -> UIViewController { PodcastsVC(account: account) }
   func segueToPlaylists(account: Account) -> UIViewController {
-    PlaylistsVC(account: account, spotifyFilter: .excludeSpotify)
+    PlaylistsVC(account: account, categoryFilter: .regular)
   }
 
   func segueToSpotifyPlaylists(account: Account) -> UIViewController {
-    PlaylistsVC(account: account, spotifyFilter: .onlySpotify)
+    PlaylistsVC(account: account, categoryFilter: .only(.topMix))
+  }
+
+  func segueToOwnMixes(account: Account) -> UIViewController {
+    PlaylistsVC(account: account, categoryFilter: .only(.ownMix))
   }
   func segueToArtists(account: Account) -> UIViewController { ArtistsVC(account: account) }
   func segueToFavoriteArtists(account: Account)

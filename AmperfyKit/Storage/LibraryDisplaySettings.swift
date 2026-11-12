@@ -43,7 +43,8 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
   case newestAlbums = 12
   case recentAlbums = 13
   case radios = 14
-  case spotifyPlaylists = 15
+  case spotifyPlaylists = 15 // shown as "Deine Top-Mixes"
+  case ownMixes = 16
 
   public static func createByDisplayName(name: String) -> LibraryDisplayType? {
     .allCases.first {
@@ -82,7 +83,9 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
     case .radios:
       return "Radios"
     case .spotifyPlaylists:
-      return "Spotify Playlists"
+      return "Deine Top-Mixes"
+    case .ownMixes:
+      return "Deine Mixes"
     }
   }
 
@@ -117,7 +120,9 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
     case .radios:
       return UIImage.radio
     case .spotifyPlaylists:
-      return UIImage.importedPlaylist
+      return UIImage.topMixes
+    case .ownMixes:
+      return UIImage.ownMixes
     }
   }
 }
@@ -171,6 +176,12 @@ public struct LibraryDisplaySettings: Sendable, Codable {
         order.insert(.spotifyPlaylists, at: insertAt)
         inUse.insert(.spotifyPlaylists)
       }
+      // FireSonic: "Deine Mixes" (Eigene-Mixe plugin) was added after that.
+      if !order.contains(.ownMixes) {
+        let insertAt = (order.firstIndex(of: .spotifyPlaylists).map { $0 + 1 }) ?? order.count
+        order.insert(.ownMixes, at: insertAt)
+        inUse.insert(.ownMixes)
+      }
       self = LibraryDisplaySettings(order: order, inUse: inUse)
     } else if let first = mapped.first {
       // If only one group present, treat it as inUse and compute notUsed
@@ -210,6 +221,7 @@ public struct LibraryDisplaySettings: Sendable, Codable {
         .directories,
         .playlists,
         .spotifyPlaylists,
+        .ownMixes,
         .podcasts,
         .radios,
       ]
@@ -235,55 +247,88 @@ public struct LibraryDisplaySettings: Sendable, Codable {
   }
 }
 
-// MARK: - SpotifyPlaylistFilter
+// MARK: - PlaylistCategory
 
-/// FireSonic: playlists imported by the Navidrome "Spotify Playlist Import" plugin get
-/// their own library section instead of being listed under "Playlists".
-public enum SpotifyPlaylistFilter: Sendable {
-  case all
-  case excludeSpotify
-  case onlySpotify
+/// FireSonic: playlists created by the Navidrome plugins are marked in their comment.
+/// - "[spotify-mix:<id>]" → Spotify mix (Spotify Playlist Import plugin, type "Mix") → "Deine Top-Mixes"
+/// - "[mix:<key>]" → mix of the "Eigene Mixe" plugin → "Deine Mixes"
+/// Every other playlist (also normal Spotify imports) stays under "Playlists".
+public enum PlaylistCategory: String, Sendable, Codable {
+  case topMix
+  case ownMix
+
+  public static func detect(comment: String?) -> PlaylistCategory? {
+    guard let comment, !comment.isEmpty else { return nil }
+    if comment.contains("[spotify-mix:") { return .topMix }
+    if comment.hasPrefix("[mix:") || comment.contains("\n[mix:") { return .ownMix }
+    return nil
+  }
 }
 
-// MARK: - SpotifyPlaylistRegistry
+// MARK: - PlaylistCategoryFilter
 
-/// Remembers which playlists were imported from Spotify. The plugin marks them in the
-/// playlist comment ("[spotify:<id>]" or "Spotify-Import: … open.spotify.com/playlist/…"),
-/// which is read while syncing the playlist list (getPlaylists).
-public enum SpotifyPlaylistRegistry {
-  private static let storageKey = "firesonic.spotifyPlaylistIds"
+public enum PlaylistCategoryFilter: Sendable, Equatable {
+  case all
+  /// normal playlists: neither top mixes nor own mixes
+  case regular
+  case only(PlaylistCategory)
+}
+
+// MARK: - PlaylistCategoryRegistry
+
+/// Remembers the category and the server cover id of every playlist. Both are read from
+/// the getPlaylists response (attributes "comment" and "coverArt") during the playlist sync.
+/// Stored in UserDefaults, so the Core Data model stays untouched.
+public enum PlaylistCategoryRegistry {
+  private static let categoryKey = "firesonic.playlistCategories"
+  private static let coverKey = "firesonic.playlistCoverArt"
+  private static let legacyKey = "firesonic.spotifyPlaylistIds"
   public static let changedNotification = Notification
-    .Name(rawValue: "de.jannes.firesonic.spotifyPlaylistsChanged")
+    .Name(rawValue: "de.jannes.firesonic.playlistCategoriesChanged")
 
-  public static func isSpotifyImport(comment: String?) -> Bool {
-    guard let comment, !comment.isEmpty else { return false }
-    return comment.contains("[spotify:") ||
-      comment.hasPrefix("Spotify-Import:") ||
-      comment.contains("open.spotify.com/playlist/")
+  public static var categories: [String: PlaylistCategory] {
+    let raw = UserDefaults.standard.dictionary(forKey: categoryKey) as? [String: String] ?? [:]
+    return raw.compactMapValues { PlaylistCategory(rawValue: $0) }
   }
 
-  public static var ids: Set<String> {
-    Set(UserDefaults.standard.stringArray(forKey: storageKey) ?? [])
+  public static var coverArtIds: [String: String] {
+    UserDefaults.standard.dictionary(forKey: coverKey) as? [String: String] ?? [:]
   }
 
-  /// Replaces the stored ids with the ones found in the latest playlist sync.
-  public static func replace(ids newIds: Set<String>) {
-    guard newIds != ids else { return }
-    UserDefaults.standard.set(newIds.sorted(), forKey: storageKey)
+  public static func category(ofPlaylistId id: String) -> PlaylistCategory? {
+    categories[id]
+  }
+
+  public static func coverArtId(ofPlaylistId id: String) -> String? {
+    coverArtIds[id]
+  }
+
+  public static func ids(of category: PlaylistCategory) -> [String] {
+    categories.filter { $0.value == category }.map { $0.key }
+  }
+
+  /// Replaces the stored data with the result of the latest playlist sync.
+  public static func replace(categories newCategories: [String: PlaylistCategory], covers: [String: String]) {
+    let defaults = UserDefaults.standard
+    defaults.removeObject(forKey: legacyKey)
+    let changedCovers = covers != coverArtIds
+    let changedCategories = newCategories != categories
+    guard changedCovers || changedCategories else { return }
+    defaults.set(newCategories.mapValues { $0.rawValue }, forKey: categoryKey)
+    defaults.set(covers, forKey: coverKey)
     DispatchQueue.main.async {
       NotificationCenter.default.post(name: changedNotification, object: nil)
     }
   }
 
-  public static func predicate(for filter: SpotifyPlaylistFilter) -> NSPredicate? {
-    let current = Array(ids)
+  public static func predicate(for filter: PlaylistCategoryFilter) -> NSPredicate? {
     switch filter {
     case .all:
       return nil
-    case .excludeSpotify:
-      return NSPredicate(format: "NOT (%K IN %@)", "id", current)
-    case .onlySpotify:
-      return NSPredicate(format: "%K IN %@", "id", current)
+    case .regular:
+      return NSPredicate(format: "NOT (%K IN %@)", "id", Array(categories.keys))
+    case let .only(category):
+      return NSPredicate(format: "%K IN %@", "id", ids(of: category))
     }
   }
 }

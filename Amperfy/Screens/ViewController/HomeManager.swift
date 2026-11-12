@@ -35,12 +35,16 @@ struct HomeItem: Hashable, @unchecked Sendable {
   /// Not part of the identity: a changed value only makes the cell reconfigure (no flicker),
   /// e.g. when a playlist cover gets created after the item was first shown.
   let artworkFingerprint: [NSManagedObjectID]
+  /// FireSonic: server cover of a playlist (changes when the cover is replaced in Navidrome)
+  let serverCoverId: String?
 
   init(section: HomeSection, playableContainable: PlayableContainable) {
     if let playlist = playableContainable as? Playlist {
       self.artworkFingerprint = playlist.managedObject.artworkItems.map(\.objectID)
+      self.serverCoverId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
     } else {
       self.artworkFingerprint = []
+      self.serverCoverId = nil
     }
     let identifier = playableContainable.containerIdentifier
     self
@@ -83,6 +87,12 @@ class HomeManager: NSObject {
   private var podcastEpisodesFetchedController: PodcastEpisodesReleaseDateFetchedResultsController?
   private var podcastsFetchedController: PodcastFetchedResultsController?
   private var radiosFetchedController: RadiosFetchedResultsController?
+  // FireSonic
+  private var topMixesFetchController: PlaylistFetchedResultsController?
+  private var ownMixesFetchController: PlaylistFetchedResultsController?
+  private var quickPlaylistsFetchController: PlaylistFetchedResultsController?
+  private var quickAlbumsFetchController: AlbumFetchedResultsController?
+  public static let quickAccessItemCount = 8
 
   init(
     account: Account,
@@ -96,9 +106,151 @@ class HomeManager: NSObject {
     self.eventLogger = eventLogger
     self.orderedVisibleSections = storage.settings.accounts
       .getSetting(account.info).read.homeSections
+    super.init()
+    migrateFireSonicSections()
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(playlistCategoriesChanged),
+      name: PlaylistCategoryRegistry.changedNotification,
+      object: nil
+    )
+  }
+
+  /// FireSonic: shows the new sections once for settings stored before they existed
+  private func migrateFireSonicSections() {
+    let flagKey = "firesonic.homeSectionsMigrated.v1.\(account.info.ident)"
+    guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+    UserDefaults.standard.set(true, forKey: flagKey)
+    let settings = storage.settings.accounts.getSetting(account.info).read
+    let missing = HomeSection.fireSonicSections.filter { !settings.homeSections.contains($0) }
+    guard !missing.isEmpty else { return }
+    let visible = missing + settings.homeSections
+    let order = HomeSection.fireSonicSections + settings.homeSectionOrder
+      .filter { !HomeSection.fireSonicSections.contains($0) }
+    storage.settings.accounts.updateSetting(account.info) { accountSettings in
+      accountSettings.homeSections = visible
+      accountSettings.homeSectionOrder = order
+    }
+    orderedVisibleSections = visible
+  }
+
+  @objc
+  private func playlistCategoriesChanged() {
+    createFireSonicFetchControllers()
+  }
+
+  private func createMixFetchController(
+    category: PlaylistCategory
+  ) -> PlaylistFetchedResultsController {
+    let controller = PlaylistFetchedResultsController(
+      coreDataCompanion: storage.main, account: account,
+      sortType: .name,
+      isGroupedInAlphabeticSections: false,
+      fetchLimit: Self.sectionMaxItemCount,
+      categoryFilter: .only(category)
+    )
+    controller.delegate = self
+    controller.search(searchText: "", playlistSearchCategory: isOfflineMode ? .cached : .all)
+    return controller
+  }
+
+  private func createFireSonicFetchControllers() {
+    if orderedVisibleSections.contains(.topMixes) {
+      topMixesFetchController?.delegate = nil
+      topMixesFetchController = createMixFetchController(category: .topMix)
+      updateTopMixes()
+    } else {
+      topMixesFetchController?.delegate = nil
+      topMixesFetchController = nil
+    }
+    if orderedVisibleSections.contains(.ownMixes) {
+      ownMixesFetchController?.delegate = nil
+      ownMixesFetchController = createMixFetchController(category: .ownMix)
+      updateOwnMixes()
+    } else {
+      ownMixesFetchController?.delegate = nil
+      ownMixesFetchController = nil
+    }
+    if orderedVisibleSections.contains(.quickAccess) {
+      quickPlaylistsFetchController?.delegate = nil
+      quickPlaylistsFetchController = PlaylistFetchedResultsController(
+        coreDataCompanion: storage.main, account: account,
+        sortType: .lastPlayed,
+        isGroupedInAlphabeticSections: false,
+        fetchLimit: Self.quickAccessItemCount
+      )
+      quickPlaylistsFetchController?.delegate = self
+      quickPlaylistsFetchController?.search(
+        searchText: "",
+        playlistSearchCategory: isOfflineMode ? .cached : .all
+      )
+      if quickAlbumsFetchController == nil {
+        quickAlbumsFetchController = AlbumFetchedResultsController(
+          coreDataCompanion: storage.main, account: account,
+          sortType: .recent,
+          isGroupedInAlphabeticSections: false,
+          fetchLimit: Self.quickAccessItemCount
+        )
+        quickAlbumsFetchController?.delegate = self
+      }
+      quickAlbumsFetchController?.search(
+        searchText: "",
+        onlyCached: isOfflineMode,
+        displayFilter: .recent
+      )
+      updateQuickAccess()
+    } else {
+      quickPlaylistsFetchController?.delegate = nil
+      quickPlaylistsFetchController = nil
+      quickAlbumsFetchController?.delegate = nil
+      quickAlbumsFetchController = nil
+    }
+  }
+
+  private func playlists(of controller: PlaylistFetchedResultsController?) -> [Playlist] {
+    guard let playlists = controller?.fetchedObjects as? [PlaylistMO] else { return [] }
+    return playlists.map { Playlist(library: storage.main.library, managedObject: $0) }
+  }
+
+  func updateTopMixes() {
+    data[.topMixes] = playlists(of: topMixesFetchController).prefix(Self.sectionMaxItemCount)
+      .map { HomeItem(section: .topMixes, playableContainable: $0) }
+    applySnapshotCB?()
+  }
+
+  func updateOwnMixes() {
+    data[.ownMixes] = playlists(of: ownMixesFetchController).prefix(Self.sectionMaxItemCount)
+      .map { HomeItem(section: .ownMixes, playableContainable: $0) }
+    applySnapshotCB?()
+  }
+
+  /// Spotify-like grid at the top: last played playlists and mixes, filled up with recently
+  /// played albums. Always an even number of tiles (two columns).
+  func updateQuickAccess() {
+    var containers: [PlayableContainable] = playlists(of: quickPlaylistsFetchController)
+      .filter { $0.lastTimePlayed != nil }
+    if containers.count < Self.quickAccessItemCount {
+      // mixes are refreshed regularly by the plugins -> good candidates even if never played
+      let mixIds = Set(containers.map(\.id))
+      let mixes = (playlists(of: topMixesFetchController) + playlists(of: ownMixesFetchController))
+        .filter { !mixIds.contains($0.id) }
+      containers += mixes.prefix(max(0, Self.quickAccessItemCount / 2 - containers.count))
+        .map { $0 as PlayableContainable }
+    }
+    if containers.count < Self.quickAccessItemCount,
+       let albums = quickAlbumsFetchController?.fetchedObjects as? [AlbumMO] {
+      containers += albums.prefix(Self.quickAccessItemCount - containers.count)
+        .map { Album(managedObject: $0) as PlayableContainable }
+    }
+    var items = containers.prefix(Self.quickAccessItemCount)
+      .map { HomeItem(section: .quickAccess, playableContainable: $0) }
+    if items.count % 2 == 1, items.count > 1 { items.removeLast() }
+    data[.quickAccess] = items
+    applySnapshotCB?()
   }
 
   func createFetchController() {
+    createFireSonicFetchControllers()
     if orderedVisibleSections.contains(where: { $0 == .recentlyPlayedAlbums }) {
       albumsRecentlyPlayedFetchController = AlbumFetchedResultsController(
         coreDataCompanion: storage.main, account: account,
@@ -253,7 +405,9 @@ class HomeManager: NSObject {
         await self.updateFrequentAlbums()
       }
     }
-    if orderedVisibleSections.contains(where: { $0 == .lastTimePlayedPlaylists }) {
+    if orderedVisibleSections.contains(where: {
+      $0 == .lastTimePlayedPlaylists || $0 == .quickAccess || $0 == .topMixes || $0 == .ownMixes
+    }) {
       Task { @MainActor in do {
         try await self.getMeta(self.account.info).librarySyncer
           .syncDownPlaylistsWithoutSongs()
@@ -431,6 +585,15 @@ extension HomeManager: @preconcurrency NSFetchedResultsControllerDelegate {
         updatePodcasts()
       } else if controller == radiosFetchedController?.fetchResultsController {
         updateRadios()
+      } else if controller == topMixesFetchController?.fetchResultsController {
+        updateTopMixes()
+        updateQuickAccess()
+      } else if controller == ownMixesFetchController?.fetchResultsController {
+        updateOwnMixes()
+        updateQuickAccess()
+      } else if controller == quickPlaylistsFetchController?.fetchResultsController ||
+        controller == quickAlbumsFetchController?.fetchResultsController {
+        updateQuickAccess()
       }
     }
   }

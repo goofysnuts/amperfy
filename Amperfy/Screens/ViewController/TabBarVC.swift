@@ -28,6 +28,8 @@ class TabBarVC: UITabBarController {
   private var libraryGroup: UITabGroup?
   private var searchTab: UISearchTab?
   private var homeTab: UITab?
+  private var playlistsTab: UITab?
+  private var settingsTab: UITab?
   private let account: Account
 
   init(account: Account) {
@@ -53,7 +55,6 @@ class TabBarVC: UITabBarController {
       )
     }
     searchTab!.automaticallyActivatesSearch = true
-    fixTabs.append(searchTab!)
 
     homeTab = UITab(
       title: TabNavigatorItem.home.title,
@@ -96,6 +97,30 @@ class TabBarVC: UITabBarController {
     libraryGroup!.managingNavigationController = UINavigationController()
     libraryGroup!.allowsReordering = true
     fixTabs.append(libraryGroup!)
+
+    // FireSonic: tab bar like Apple Music – Home, Library, Playlists, Settings and the
+    // separate search button (UISearchTab is placed at the trailing end by the system)
+    playlistsTab = UITab(
+      title: "Playlists",
+      image: .playlist,
+      identifier: "Tabs.FireSonic.Playlists"
+    ) { _ in
+      UINavigationController(
+        rootViewController: AppStoryboard.Main.segueToPlaylists(account: self.account)
+      )
+    }
+    fixTabs.append(playlistsTab!)
+
+    settingsTab = UITab(
+      title: "Settings",
+      image: .settings,
+      identifier: "Tabs.FireSonic.Settings"
+    ) { _ in
+      AppStoryboard.Main.segueToSettings()
+    }
+    fixTabs.append(settingsTab!)
+
+    fixTabs.append(searchTab!)
 
     delegate = self
     tabs = fixTabs

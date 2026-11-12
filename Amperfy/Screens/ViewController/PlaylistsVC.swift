@@ -84,16 +84,20 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
   private var fetchedResultsController: PlaylistFetchedResultsController!
   private var optionsButton: UIBarButtonItem!
   private var sortType: PlaylistSortType = .name
-  /// FireSonic: Spotify imports are shown in their own library section
-  private var spotifyFilter: SpotifyPlaylistFilter = .excludeSpotify
+  /// FireSonic: top mixes and own mixes are shown in their own library sections
+  private var spotifyFilter: PlaylistCategoryFilter = .regular
 
-  init(account: Account, spotifyFilter: SpotifyPlaylistFilter = .excludeSpotify) {
-    self.spotifyFilter = spotifyFilter
+  init(account: Account, categoryFilter: PlaylistCategoryFilter = .regular) {
+    self.spotifyFilter = categoryFilter
     super.init(style: .plain, account: account)
   }
 
-  private func sectionTitle(for filter: SpotifyPlaylistFilter) -> String {
-    filter == .onlySpotify ? "Spotify Playlists" : "Playlists"
+  private func sectionTitle(for filter: PlaylistCategoryFilter) -> String {
+    switch filter {
+    case .only(.topMix): return LibraryDisplayType.spotifyPlaylists.displayName
+    case .only(.ownMix): return LibraryDisplayType.ownMixes.displayName
+    default: return "Playlists"
+    }
   }
 
   required init?(coder: NSCoder) {
@@ -146,7 +150,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(spotifyPlaylistsChanged),
-      name: SpotifyPlaylistRegistry.changedNotification,
+      name: PlaylistCategoryRegistry.changedNotification,
       object: nil
     )
     tableView.register(nibName: PlaylistTableCell.typeName)
@@ -207,10 +211,14 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
 
   lazy var emptyContentConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
-    if self.spotifyFilter == .onlySpotify {
-      config.image = .importedPlaylist
-      config.text = "No Spotify Playlists"
-      config.secondaryText = "Playlists imported with the Navidrome Spotify plugin will appear here."
+    if self.spotifyFilter == .only(.topMix) {
+      config.image = .topMixes
+      config.text = "Keine Top-Mixes"
+      config.secondaryText = "Spotify-Mixe, die mit dem Navidrome-Plugin „Spotify Playlist Import“ als „Mix“ importiert werden, erscheinen hier."
+    } else if self.spotifyFilter == .only(.ownMix) {
+      config.image = .ownMixes
+      config.text = "Keine Mixes"
+      config.secondaryText = "Mixe des Navidrome-Plugins „Eigene Mixe“ erscheinen hier."
     } else {
       config.image = .playlist
       config.text = "No Playlists"
@@ -227,7 +235,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       coreDataCompanion: appDelegate.storage.main, account: account,
       sortType: sortType,
       isGroupedInAlphabeticSections: sortType.asSectionIndexType != .none,
-      spotifyFilter: spotifyFilter
+      categoryFilter: spotifyFilter
     )
     fetchedResultsController.fetchResultsController.sectionIndexType = sortType.asSectionIndexType
     singleFetchedResultsController = fetchedResultsController
@@ -396,7 +404,6 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
 
   @objc
   private func spotifyPlaylistsChanged() {
-    guard spotifyFilter != .all else { return }
     change(sortType: sortType)
     updateSearchResults(for: searchController)
   }

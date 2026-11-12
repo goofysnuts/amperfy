@@ -34,8 +34,18 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
   case randomGenres
   case randomSongs
   case frequentAlbums
+  // FireSonic
+  case quickAccess
+  case topMixes
+  case ownMixes
+
+  /// FireSonic sections that are added once to existing home settings
+  public static let fireSonicSections: [HomeSection] = [.quickAccess, .topMixes, .ownMixes]
 
   static let defaultValue: [HomeSection] = [
+    .quickAccess,
+    .topMixes,
+    .ownMixes,
     .randomAlbums,
     .recentlyPlayedAlbums,
     .frequentAlbums,
@@ -56,6 +66,9 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .randomGenres: return "Random Genres"
     case .randomSongs: return "Random Songs"
     case .frequentAlbums: return "Frequently Played Albums"
+    case .quickAccess: return "Schnellzugriff"
+    case .topMixes: return "Deine Top-Mixes"
+    case .ownMixes: return "Deine Mixes"
     }
   }
 
@@ -76,6 +89,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .randomGenres: return true
     case .randomSongs: return true
     case .frequentAlbums: return false
+    case .quickAccess, .topMixes, .ownMixes: return false
     }
   }
 }

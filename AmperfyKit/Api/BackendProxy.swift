@@ -406,6 +406,10 @@ extension BackendProxy: BackendApi {
     try await activeApi.generateUrl(forArtwork: artwork)
   }
 
+  public func generateUrl(forArtworkId id: String) async throws -> URL {
+    try await activeApi.generateUrl(forArtworkId: id)
+  }
+
   public func checkForErrorResponse(response: APIDataResponse) -> ResponseError? {
     activeApi.checkForErrorResponse(response: response)
   }

@@ -116,6 +116,10 @@ extension SubsonicApi: BackendApi {
     try await subsonicServerApi.generateUrl(forArtworkId: artwork.id)
   }
 
+  func generateUrl(forArtworkId id: String) async throws -> URL {
+    try await subsonicServerApi.generateUrl(forArtworkId: id)
+  }
+
   func checkForErrorResponse(response: APIDataResponse) -> ResponseError? {
     subsonicServerApi.checkForErrorResponse(response: response)
   }

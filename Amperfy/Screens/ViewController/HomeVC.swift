@@ -33,6 +33,23 @@ final class HomeVC: UICollectionViewController {
   private let log = OSLog(subsystem: "Amperfy", category: "HomeVC")
 
   private static let itemWidth: CGFloat = 160.0
+  /// FireSonic: the mix sections get larger covers (Spotify-like "Deine Top-Mixes")
+  private static let mixItemWidth: CGFloat = 176.0
+
+  private static func itemWidth(for section: HomeSection?) -> CGFloat {
+    switch section {
+    case .topMixes, .ownMixes: return mixItemWidth
+    default: return itemWidth
+    }
+  }
+
+  /// Gives the layout access to the visible sections (the layout is created before `self`)
+  @MainActor
+  private final class SectionLookup {
+    var sections: () -> [HomeSection] = { [] }
+  }
+
+  private let sectionLookup: SectionLookup
 
   private var userButton: UIButton?
   private var userBarButtonItem: UIBarButtonItem?
@@ -51,8 +68,11 @@ final class HomeVC: UICollectionViewController {
       getMeta: appDelegate.getMeta,
       eventLogger: appDelegate.eventLogger
     )
-    let layout = HomeVC.createLayout()
+    let lookup = SectionLookup()
+    self.sectionLookup = lookup
+    let layout = HomeVC.createLayout(lookup: lookup)
     super.init(collectionViewLayout: layout)
+    lookup.sections = { [weak self] in self?.sharedHome.orderedVisibleSections ?? [] }
     sharedHome.applySnapshotCB = { [weak self] in
       guard let self else { return }
       applySnapshot(animated: true)
@@ -124,9 +144,37 @@ final class HomeVC: UICollectionViewController {
 
   // MARK: - Layout
 
-  private static func createLayout() -> UICollectionViewCompositionalLayout {
+  private static func createQuickAccessLayout(
+    environment: NSCollectionLayoutEnvironment
+  ) -> NSCollectionLayoutSection {
+    let tileHeight = HomeQuickAccessCell.tileHeight(for: environment.traitCollection)
+    let columns = environment.container.effectiveContentSize.width > 700 ? 4 : 2
+    let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
+      widthDimension: .fractionalWidth(1.0 / CGFloat(columns)),
+      heightDimension: .fractionalHeight(1.0)
+    ))
+    item.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4)
+    let group = NSCollectionLayoutGroup.horizontal(
+      layoutSize: NSCollectionLayoutSize(
+        widthDimension: .fractionalWidth(1.0),
+        heightDimension: .absolute(tileHeight)
+      ),
+      repeatingSubitem: item,
+      count: columns
+    )
+    let section = NSCollectionLayoutSection(group: group)
+    section.interGroupSpacing = 8
+    section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 24, trailing: 12)
+    return section
+  }
+
+  private static func createLayout(lookup: SectionLookup) -> UICollectionViewCompositionalLayout {
     let layout = UICollectionViewCompositionalLayout { sectionIndex, environment in
-      guard let _ = HomeSection(rawValue: sectionIndex) else { return nil }
+      let homeSection = lookup.sections().element(at: sectionIndex)
+      if homeSection == .quickAccess {
+        return createQuickAccessLayout(environment: environment)
+      }
+      let itemWidth = Self.itemWidth(for: homeSection)
 
       // Item: square image with title below
       let itemSize = NSCollectionLayoutSize(
@@ -182,6 +230,10 @@ final class HomeVC: UICollectionViewController {
       forCellWithReuseIdentifier: AlbumCollectionCell.typeName
     )
     collectionView.register(
+      HomeQuickAccessCell.self,
+      forCellWithReuseIdentifier: HomeQuickAccessCell.reuseID
+    )
+    collectionView.register(
       SectionHeaderView.self,
       forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
       withReuseIdentifier: SectionHeaderView.reuseID
@@ -194,7 +246,21 @@ final class HomeVC: UICollectionViewController {
     dataSource = UICollectionViewDiffableDataSource<
       HomeSection,
       HomeItem
-    >(collectionView: collectionView) { collectionView, indexPath, item in
+    >(collectionView: collectionView) { [weak self] collectionView, indexPath, item in
+      guard let self else { return UICollectionViewCell() }
+      let homeSection = self.sharedHome.orderedVisibleSections.element(at: indexPath.section)
+      if homeSection == .quickAccess {
+        let cell = collectionView.dequeueReusableCell(
+          withReuseIdentifier: HomeQuickAccessCell.reuseID,
+          for: indexPath
+        ) as! HomeQuickAccessCell
+        cell.display(
+          container: item.playableContainable,
+          theme: self.appDelegate.storage.settings.accounts.getSetting(self.account.info).read
+            .themePreference
+        )
+        return cell
+      }
       let cell = collectionView.dequeueReusableCell(
         withReuseIdentifier: AlbumCollectionCell.typeName,
         for: indexPath
@@ -202,7 +268,7 @@ final class HomeVC: UICollectionViewController {
       cell.display(
         container: item.playableContainable,
         rootView: self,
-        itemWidth: Self.itemWidth,
+        itemWidth: Self.itemWidth(for: homeSection),
         initialIndexPath: indexPath
       )
       return cell
@@ -253,9 +319,10 @@ final class HomeVC: UICollectionViewController {
     let oldFingerprints = Dictionary(oldItems.map { ($0.id, $0.artworkFingerprint) }) { first, _ in
       first
     }
+    let oldCovers = Dictionary(oldItems.map { ($0.id, $0.serverCoverId) }) { first, _ in first }
     let changedItems = snapshot.itemIdentifiers.filter {
       guard let old = oldFingerprints[$0.id] else { return false }
-      return old != $0.artworkFingerprint
+      return old != $0.artworkFingerprint || oldCovers[$0.id] != $0.serverCoverId
     }
     snapshot.reconfigureItems(changedItems)
     dataSource.apply(snapshot, animatingDifferences: animated)
@@ -467,11 +534,11 @@ final class SectionHeaderView: UICollectionReusableView {
   private let titleLabel: UILabel = {
     let lbl = ScaledLabel()
     lbl.translatesAutoresizingMaskIntoConstraints = false
-    // title 3 at the default text size, scaled with the user's text size
+    // FireSonic: title 2 bold (Spotify-like section headers) at the default text size, scaled with the user's text size
     let defaultTraits = UITraitCollection(preferredContentSizeCategory: .large)
-    let font = UIFont.preferredFont(forTextStyle: .title3, compatibleWith: defaultTraits)
-      .withWeight(.semibold)
-    lbl.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: font)
+    let font = UIFont.preferredFont(forTextStyle: .title2, compatibleWith: defaultTraits)
+      .withWeight(.bold)
+    lbl.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: font)
     lbl.adjustsFontForContentSizeCategory = true
     lbl.textColor = .label
     return lbl
@@ -533,5 +600,80 @@ extension UIFont {
       UIFontDescriptor.AttributeName.traits: [UIFontDescriptor.TraitKey.weight: weight],
     ])
     return UIFont(descriptor: descriptor, size: pointSize)
+  }
+}
+
+// MARK: - HomeQuickAccessCell
+
+/// FireSonic: compact tile of the quick access grid at the top of Home (Spotify-like),
+/// styled with system materials and Dynamic Type (HIG).
+final class HomeQuickAccessCell: UICollectionViewCell {
+  static let reuseID = "HomeQuickAccessCell"
+
+  static func tileHeight(for traits: UITraitCollection) -> CGFloat {
+    TextScaling.scaledValue(56.0, compatibleWith: traits, maximum: .accessibilityMedium)
+  }
+
+  private let artwork = EntityImageView(frame: .zero)
+  private let titleLabel: UILabel = {
+    let label = UILabel()
+    label.font = UIFontMetrics(forTextStyle: .subheadline)
+      .scaledFont(for: .systemFont(ofSize: 13, weight: .semibold), maximumPointSize: 22)
+    label.adjustsFontForContentSizeCategory = true
+    label.numberOfLines = 2
+    label.textColor = .label
+    label.lineBreakMode = .byTruncatingTail
+    return label
+  }()
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    var background = UIBackgroundConfiguration.clear()
+    background.backgroundColor = .tertiarySystemFill
+    background.cornerRadius = 8
+    backgroundConfiguration = background
+    contentView.layer.cornerRadius = 8
+    contentView.layer.cornerCurve = .continuous
+    contentView.clipsToBounds = true
+
+    artwork.translatesAutoresizingMaskIntoConstraints = false
+    titleLabel.translatesAutoresizingMaskIntoConstraints = false
+    contentView.addSubview(artwork)
+    contentView.addSubview(titleLabel)
+    NSLayoutConstraint.activate([
+      artwork.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      artwork.topAnchor.constraint(equalTo: contentView.topAnchor),
+      artwork.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+      artwork.widthAnchor.constraint(equalTo: artwork.heightAnchor),
+      titleLabel.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 10),
+      titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+      titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+      titleLabel.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 4),
+      titleLabel.bottomAnchor.constraint(
+        lessThanOrEqualTo: contentView.bottomAnchor,
+        constant: -4
+      ),
+    ])
+    isAccessibilityElement = true
+    accessibilityTraits = .button
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override var isHighlighted: Bool {
+    didSet {
+      UIView.animate(withDuration: 0.15) {
+        self.contentView.alpha = self.isHighlighted ? 0.6 : 1.0
+      }
+    }
+  }
+
+  func display(container: PlayableContainable, theme: ThemePreference) {
+    titleLabel.text = container.name
+    accessibilityLabel = container.name
+    artwork.display(theme: theme, container: container, cornerRadius: .verySmall)
+    artwork.layer.cornerRadius = 0
   }
 }

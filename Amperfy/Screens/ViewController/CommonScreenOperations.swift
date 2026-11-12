@@ -122,11 +122,15 @@ extension UIViewController {
     )
   }
 
+  static var blackboxShowsAccountButton: Bool { false }
+
   public func setupUserNavButton(
     currentAccount: Account,
     userButton: inout UIButton?,
     userBarButtonItem: inout UIBarButtonItem?
   ) {
+    // Blackbox: accounts are switched in the settings – no account button in the nav bars
+    if !Self.blackboxShowsAccountButton { return }
     let image = UIImage.userCircle(withConfiguration: UIImage.SymbolConfiguration(
       pointSize: 24,
       weight: .regular

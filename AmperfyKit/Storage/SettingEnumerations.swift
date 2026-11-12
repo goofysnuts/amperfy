@@ -289,6 +289,7 @@ public enum ThemePreference: Int, CaseIterable, Sendable, Codable {
   }
 
   public var asSwiftUIColor: Color {
+    if let custom = BlackboxAppearance.customAccent { return Color(uiColor: custom) }
     switch self {
     case .blue:
       return .blue
@@ -306,6 +307,7 @@ public enum ThemePreference: Int, CaseIterable, Sendable, Codable {
   }
 
   public var asColor: UIColor {
+    if let custom = BlackboxAppearance.customAccent { return custom }
     switch self {
     case .blue:
       return .systemBlue

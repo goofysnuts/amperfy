@@ -32,6 +32,7 @@ class SsPlaylistParserDelegate: SsXmlParser {
   /// FireSonic: ids of playlists imported from Spotify (marked in the comment)
   private var playlistCategories = [String: PlaylistCategory]()
   private var playlistCovers = [String: String]()
+  private var recaps = [String: RecapData]()
   private let account: Account
   private let library: LibraryStorage
 
@@ -88,6 +89,9 @@ class SsPlaylistParserDelegate: SsXmlParser {
       if let category = PlaylistCategory.detect(comment: attributeDict["comment"]) {
         playlistCategories[playlistId] = category
       }
+      if let recap = RecapData.parse(comment: attributeDict["comment"]) {
+        recaps[playlistId] = recap
+      }
       if let coverArt = attributeDict["coverArt"], !coverArt.isEmpty {
         playlistCovers[playlistId] = coverArt
       }
@@ -117,6 +121,7 @@ class SsPlaylistParserDelegate: SsXmlParser {
       playlist = nil
     case "playlists":
       PlaylistCategoryRegistry.replace(categories: playlistCategories, covers: playlistCovers)
+      RecapRegistry.replace(recaps)
       let outdatedPlaylists = allOldPlaylists.subtracting(parsedPlaylists)
       outdatedPlaylists.forEach {
         if $0.id != "" {

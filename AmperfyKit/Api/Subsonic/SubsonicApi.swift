@@ -120,6 +120,10 @@ extension SubsonicApi: BackendApi {
     try await subsonicServerApi.generateUrl(forArtworkId: id)
   }
 
+  func generateUrl(forSongId id: String) async throws -> URL {
+    try await subsonicServerApi.generateUrl(forDownloadingPlayableId: id)
+  }
+
   func checkForErrorResponse(response: APIDataResponse) -> ResponseError? {
     subsonicServerApi.checkForErrorResponse(response: response)
   }

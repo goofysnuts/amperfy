@@ -77,7 +77,7 @@ class LoginVC: UIViewController {
 
   fileprivate lazy var amperfyLabel: UILabel = {
     let label = UILabel()
-    label.text = "Amperfy"
+    label.text = "Blackbox"
     label.font = .systemFont(ofSize: 50, weight: .bold)
     label.textColor = .tintColor
     label.tintColor = appDelegate.storage.settings.accounts.getSetting(nil).read.themePreference

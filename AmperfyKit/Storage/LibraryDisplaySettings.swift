@@ -332,3 +332,157 @@ public enum PlaylistCategoryRegistry {
     }
   }
 }
+
+// MARK: - Blackbox: Rückblicke (Navidrome-Plugin "Rückblick")
+
+/// Data written by the Rückblick plugin into the second line of the playlist comment,
+/// right after the marker "[recap:<month|year>:<id>]".
+public struct RecapData: Codable, Sendable, Hashable {
+  public struct Item: Codable, Sendable, Hashable {
+    public let n: String
+    public let s: String?
+    public let p: Int?
+    public let m: Int?
+    public let a: String?
+
+    public var name: String { n }
+    public var sub: String? { s }
+    public var plays: Int { p ?? 0 }
+    public var minutes: Int { m ?? 0 }
+    /// cover art id for getCoverArt (media file of a representative song)
+    public var coverArtId: String? { a.map { "mf-\($0)" } }
+    public var songId: String? { a }
+  }
+
+  public let v: Int?
+  public let k: String
+  public let l: String
+  public let id: String
+  public let fin: Bool?
+  public let min: Int
+  public let pl: Int
+  public let pm: Int?
+  public let plb: String?
+  public let ds: Int?
+  public let da: Int?
+  public let na: Int?
+  public let ts: [Item]?
+  public let ta: [Item]?
+  public let tal: [Item]?
+  public let tg: [Item]?
+  public let bm: String?
+  public let bw: String?
+  public let ph: Int?
+  public let dp: String?
+  public let st: Int?
+  public let td: String?
+  public let tdm: Int?
+  public let fs: Item?
+  public let tyn: String?
+  public let tyd: String?
+
+  public var isYear: Bool { k == "year" }
+  public var label: String { l }
+  public var periodId: String { id }
+  public var minutes: Int { min }
+  public var plays: Int { pl }
+  public var topSongs: [Item] { ts ?? [] }
+  public var topArtists: [Item] { ta ?? [] }
+  public var topAlbums: [Item] { tal ?? [] }
+  public var topGenres: [Item] { tg ?? [] }
+
+  public static func parse(comment: String?) -> RecapData? {
+    guard let comment, let range = comment.range(of: "[recap:") else { return nil }
+    let rest = comment[range.lowerBound...]
+    let lines = rest.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false)
+    guard lines.count >= 2 else { return nil }
+    let json = lines[1].trimmingCharacters(in: .whitespaces)
+    guard json.hasPrefix("{"), let data = json.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode(RecapData.self, from: data)
+  }
+}
+
+public enum RecapRegistry {
+  private static let dataKey = "blackbox.recaps"
+  private static let seenKey = "blackbox.recapsSeen"
+  public static let changedNotification = Notification
+    .Name(rawValue: "de.jannes.blackbox.recapsChanged")
+
+  /// playlist id -> recap data
+  public static var recaps: [String: RecapData] {
+    guard let data = UserDefaults.standard.data(forKey: dataKey),
+          let decoded = try? JSONDecoder().decode([String: RecapData].self, from: data)
+    else { return [:] }
+    return decoded
+  }
+
+  public static func replace(_ new: [String: RecapData]) {
+    guard new != recaps else { return }
+    if let data = try? JSONEncoder().encode(new) {
+      UserDefaults.standard.set(data, forKey: dataKey)
+    }
+    DispatchQueue.main.async {
+      NotificationCenter.default.post(name: changedNotification, object: nil)
+    }
+  }
+
+  /// newest first, years before months of the same period
+  public static var sortedPlaylistIds: [(playlistId: String, data: RecapData)] {
+    recaps.map { (playlistId: $0.key, data: $0.value) }
+      .sorted { $0.data.periodId > $1.data.periodId }
+  }
+
+  private static func seenKeyFor(_ data: RecapData) -> String { "\(data.k):\(data.id)" }
+
+  public static func isSeen(_ data: RecapData) -> Bool {
+    (UserDefaults.standard.stringArray(forKey: seenKey) ?? []).contains(seenKeyFor(data))
+  }
+
+  public static func markSeen(_ data: RecapData) {
+    var seen = UserDefaults.standard.stringArray(forKey: seenKey) ?? []
+    guard !seen.contains(seenKeyFor(data)) else { return }
+    seen.append(seenKeyFor(data))
+    UserDefaults.standard.set(seen, forKey: seenKey)
+    NotificationCenter.default.post(name: changedNotification, object: nil)
+  }
+}
+
+// MARK: - Blackbox: Darstellung
+
+public enum BlackboxAppearance {
+  private static let titleKey = "blackbox.homeTitle"
+  private static let accentKey = "blackbox.accentRGBA"
+  public static let changedNotification = Notification
+    .Name(rawValue: "de.jannes.blackbox.appearanceChanged")
+
+  public static var homeTitle: String {
+    get {
+      let t = UserDefaults.standard.string(forKey: titleKey)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      return t.isEmpty ? "Home" : t
+    }
+    set {
+      UserDefaults.standard.set(newValue, forKey: titleKey)
+      NotificationCenter.default.post(name: changedNotification, object: nil)
+    }
+  }
+
+  /// custom accent color; nil = color of the theme preference
+  public static var customAccent: UIColor? {
+    get {
+      guard let c = UserDefaults.standard.array(forKey: accentKey) as? [Double], c.count == 4
+      else { return nil }
+      return UIColor(red: c[0], green: c[1], blue: c[2], alpha: c[3])
+    }
+    set {
+      if let newValue {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        newValue.getRed(&r, green: &g, blue: &b, alpha: &a)
+        UserDefaults.standard.set([Double(r), Double(g), Double(b), Double(a)], forKey: accentKey)
+      } else {
+        UserDefaults.standard.removeObject(forKey: accentKey)
+      }
+      NotificationCenter.default.post(name: changedNotification, object: nil)
+    }
+  }
+}

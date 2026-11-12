@@ -755,7 +755,7 @@ final class SectionHeaderView: UICollectionReusableView {
     addSubview(titleLabel)
     addSubview(refreshButton)
     NSLayoutConstraint.activate([
-      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0),
       titleLabel.trailingAnchor.constraint(
         lessThanOrEqualTo: refreshButton.leadingAnchor,
         constant: -8

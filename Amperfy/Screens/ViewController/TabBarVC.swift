@@ -987,7 +987,8 @@ struct BlackboxNowPlaying {
         position: s?.position ?? 0,
         duration: s?.duration ?? 0,
         isShuffle: s?.shuffle ?? false,
-        repeatMode: RepeatMode(rawValue: Int16(s?.repeatMode ?? 0)) ?? .off,
+        // Media3 on the FireTV: 0 = off, 1 = one, 2 = all
+        repeatMode: { switch s?.repeatMode ?? 0 { case 1: return RepeatMode.single; case 2: return .all; default: return .off } }(),
         isRemote: true,
         hasItem: s?.title != nil
       )

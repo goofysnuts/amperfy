@@ -183,14 +183,14 @@ class LibraryElementDetailTableHeaderView: UIView {
 
     func round(_ name: String, label: String, action: @escaping () -> ()) -> UIButton {
       var c = UIButton.Configuration.filled()
-      c.image = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold))
+      c.image = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .bold))
       c.baseBackgroundColor = UIColor.black.withAlphaComponent(0.35)
       c.baseForegroundColor = .white
       c.cornerStyle = .capsule
       let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
       b.accessibilityLabel = label
-      b.widthAnchor.constraint(equalToConstant: 44).isActive = true
-      b.heightAnchor.constraint(equalToConstant: 44).isActive = true
+      b.widthAnchor.constraint(equalToConstant: 38).isActive = true
+      b.heightAnchor.constraint(equalToConstant: 38).isActive = true
       return b
     }
     let shuffle = round("shuffle", label: "Zufällig") { [weak self] in
@@ -215,7 +215,7 @@ class LibraryElementDetailTableHeaderView: UIView {
       Haptics.success.vibrate(isHapticsEnabled: self.appDelegate.storage.settings.user.isHapticsEnabled)
       self.play(isShuffled: false)
     })
-    play.heightAnchor.constraint(equalToConstant: 44).isActive = true
+    play.heightAnchor.constraint(equalToConstant: 38).isActive = true
     let download = round("arrow.down", label: "Herunterladen") { [weak self] in
       guard let self, let context = self.config?.playContextCb?(),
             let info = context.playables.first?.account?.info else { return }

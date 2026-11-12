@@ -162,6 +162,7 @@ class LibraryElementDetailTableHeaderView: UIView {
     )
     playShuffledButton.layer.cornerRadius = 10.0
     playShuffledButton.isHidden = configuration.isShuffleHidden
+    if configuration.isEmbeddedInOtherView { applyBlackboxStyle() }
     activate()
     registerForTraitChanges(
       [UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self],
@@ -171,13 +172,87 @@ class LibraryElementDetailTableHeaderView: UIView {
     )
   }
 
+  // MARK: Blackbox – round shuffle, white Play pill, round download (album/playlist details)
+
+  private var blackboxRow: UIStackView?
+
+  private func applyBlackboxStyle() {
+    guard blackboxRow == nil, let container = playAllButton.superview?.superview else { return }
+    playAllButton.superview?.isHidden = true
+    infoContainerView.isHidden = true
+
+    func round(_ name: String, label: String, action: @escaping () -> ()) -> UIButton {
+      var c = UIButton.Configuration.filled()
+      c.image = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .bold))
+      c.baseBackgroundColor = UIColor.black.withAlphaComponent(0.35)
+      c.baseForegroundColor = .white
+      c.cornerStyle = .capsule
+      let b = UIButton(configuration: c, primaryAction: UIAction { _ in action() })
+      b.accessibilityLabel = label
+      b.widthAnchor.constraint(equalToConstant: 44).isActive = true
+      b.heightAnchor.constraint(equalToConstant: 44).isActive = true
+      return b
+    }
+    let shuffle = round("shuffle", label: "Zufällig") { [weak self] in
+      guard let self else { return }
+      Haptics.success.vibrate(isHapticsEnabled: self.appDelegate.storage.settings.user.isHapticsEnabled)
+      self.shuffle()
+    }
+    var pc = UIButton.Configuration.filled()
+    pc.title = config?.customPlayName ?? "Play"
+    pc.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold))
+    pc.imagePadding = 8
+    pc.baseBackgroundColor = .white
+    pc.baseForegroundColor = .black
+    pc.cornerStyle = .capsule
+    pc.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+      var a = a
+      a.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+      return a
+    }
+    let play = UIButton(configuration: pc, primaryAction: UIAction { [weak self] _ in
+      guard let self else { return }
+      Haptics.success.vibrate(isHapticsEnabled: self.appDelegate.storage.settings.user.isHapticsEnabled)
+      self.play(isShuffled: false)
+    })
+    play.heightAnchor.constraint(equalToConstant: 44).isActive = true
+    let download = round("arrow.down", label: "Herunterladen") { [weak self] in
+      guard let self, let context = self.config?.playContextCb?(),
+            let info = context.playables.first?.account?.info else { return }
+      self.appDelegate.getMeta(info).playableDownloadManager.download(objects: context.playables)
+      Haptics.success.vibrate(isHapticsEnabled: self.appDelegate.storage.settings.user.isHapticsEnabled)
+    }
+    let row = UIStackView(arrangedSubviews: [shuffle, play, download])
+    row.axis = .horizontal
+    row.alignment = .center
+    row.spacing = 18
+    row.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(row)
+    NSLayoutConstraint.activate([
+      row.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+      row.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+      play.widthAnchor.constraint(equalTo: container.widthAnchor, multiplier: 0.42),
+    ])
+    blackboxRow = row
+    // keep references for activate/deactivate
+    blackboxPlay = play
+    blackboxShuffle = shuffle
+  }
+
+  private weak var blackboxPlay: UIButton?
+  private weak var blackboxShuffle: UIButton?
+
   func activate() {
+    blackboxPlay?.isEnabled = true
+    blackboxShuffle?.isEnabled = true
     playAllButton.isEnabled = true
     playShuffledButton.isEnabled = !(config?.isShuffleOnContextNeccessary ?? true) || appDelegate
       .storage.settings.user.isPlayerShuffleButtonEnabled
   }
 
   func deactivate() {
+    blackboxPlay?.isEnabled = false
+    blackboxShuffle?.isEnabled = false
     playAllButton.isEnabled = false
     playShuffledButton.isEnabled = false
   }

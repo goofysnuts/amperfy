@@ -255,7 +255,8 @@ class PlayableTableCell: BasicTableCell {
     isHovered = false
     register()
     tapGestureRecognizer.isEnabled = (displayMode == .normal)
-    backgroundColor = .systemBackground
+    // Blackbox: on album/playlist details the cover-colored background shows through
+    backgroundColor = (rootView is AlbumDetailVC || rootView is PlaylistDetailVC) ? .clear : .systemBackground
     refresh()
   }
 
@@ -555,7 +556,7 @@ class PlayableTableCell: BasicTableCell {
         .getSetting(playable?.account?.info).read.themePreference.asColor
       optionsButton.imageView?.tintColor = appDelegate.storage.settings.accounts
         .getSetting(playable?.account?.info).read.themePreference.asColor
-      backgroundColor = (rootView is PopupPlayerVC) ?
+      backgroundColor = (rootView is PopupPlayerVC || rootView is AlbumDetailVC || rootView is PlaylistDetailVC) ?
         .secondarySystemGroupedBackground.withAlphaComponent(0.2) :
         .secondarySystemGroupedBackground
     } else {

@@ -364,6 +364,15 @@ struct FireTVStatus: Decodable, Sendable {
   let queueLength: Int?
   let shuffle: Bool?
   let repeatMode: Int?
+  let queue: [FireTVQueueEntry]?
+}
+
+struct FireTVQueueEntry: Decodable, Sendable, Hashable {
+  let index: Int
+  let id: String
+  let title: String
+  let artist: String
+  let coverArt: String?
 }
 
 @MainActor
@@ -631,7 +640,7 @@ final class FireTVRemoteVC: UIViewController {
     hintLabel.textColor = .secondaryLabel
     hintLabel.numberOfLines = 0
     hintLabel.textAlignment = .center
-    hintLabel.text = "Blackbox muss auf dem FireTV geöffnet sein (gleiches WLAN)."
+    hintLabel.text = "Der FireTV muss an sein (FireLauncher) oder Blackbox geöffnet (gleiches WLAN)."
 
     let timeRow = UIStackView(arrangedSubviews: [elapsedLabel, remainingLabel])
     timeRow.distribution = .fillEqually
@@ -743,7 +752,7 @@ final class FireTVRemoteVC: UIViewController {
       hintLabel.text = "Verbunden"
     } catch {
       status = nil
-      hintLabel.text = "FireTV nicht erreichbar – ist Blackbox auf dem FireTV geöffnet?"
+      hintLabel.text = "FireTV nicht erreichbar – ist er an und im selben WLAN?"
     }
     render()
   }
@@ -1275,9 +1284,15 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     refresh()
   }
 
+  private var coverMaxHeight: NSLayoutConstraint?
+
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     gradient.frame = view.bounds
+    // everything below the cover needs ~400 pt -> the cover gets the rest (iPad landscape)
+    let available = view.safeAreaLayoutGuide.layoutFrame.height - 410
+    let maxHeight = max(140, available)
+    if coverMaxHeight?.constant != maxHeight { coverMaxHeight?.constant = maxHeight }
   }
 
   private func symbol(_ button: UIButton, _ name: String, size: CGFloat, weight: UIImage.SymbolWeight = .semibold, label: String, filled: Bool = false) {
@@ -1353,9 +1368,20 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     symbol(lyricsButton, "quote.bubble", size: 20, label: "Songtext")
     lyricsButton.addAction(UIAction { [weak self] _ in self?.showSheet(LyricsVC()) }, for: .touchUpInside)
     symbol(queueButton, "list.bullet", size: 20, label: "Wiedergabeliste")
-    queueButton.addAction(UIAction { [weak self] _ in self?.showSheet(QueueVC()) }, for: .touchUpInside)
+    queueButton.addAction(UIAction { [weak self] _ in
+      guard let self else { return }
+      self.showSheet(RemoteSession.shared.isRemoteActive ? RemoteQueueVC() : QueueVC())
+    }, for: .touchUpInside)
     symbol(sleepButton, "moon.zzz", size: 20, label: "Schlaftimer")
     sleepButton.showsMenuAsPrimaryAction = true
+    sleepButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+      guard let self else { completion([]); return }
+      completion([self.appDelegateRef.createSleepTimerMenu(refreshCB: nil)])
+    }])
+    optionsButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+      guard let self, let song = BlackboxNowPlaying.current().song else { completion([]); return }
+      completion(EntityPreviewActionBuilder(container: song, on: self).createMenuActions())
+    }])
 
     let ratingRow = UIStackView(arrangedSubviews: [favoriteButton, ratingView, optionsButton])
     ratingRow.distribution = .equalCentering
@@ -1369,10 +1395,14 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     bottom.distribution = .equalSpacing
     bottom.alignment = .center
 
-    let stack = UIStackView(arrangedSubviews: [remoteBadge, coverView, titleLabel, artistLabel, ratingRow, slider, timeRow, transport, bottom])
+    // cover: always square and complete (iPad landscape), centered in its row
+    let coverRow = UIView()
+    coverRow.addSubview(coverView)
+    coverView.translatesAutoresizingMaskIntoConstraints = false
+    let stack = UIStackView(arrangedSubviews: [coverRow, titleLabel, artistLabel, ratingRow, slider, timeRow, transport, bottom])
     stack.axis = .vertical
     stack.spacing = 10
-    stack.setCustomSpacing(26, after: coverView)
+    stack.setCustomSpacing(26, after: coverRow)
     stack.setCustomSpacing(2, after: titleLabel)
     stack.setCustomSpacing(18, after: artistLabel)
     stack.setCustomSpacing(14, after: ratingRow)
@@ -1386,8 +1416,9 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     view.addSubview(scroll)
     scroll.addSubview(stack)
 
-    let cover = coverView.widthAnchor.constraint(equalTo: stack.widthAnchor)
+    let cover = coverView.widthAnchor.constraint(equalTo: coverRow.widthAnchor)
     cover.priority = .defaultHigh
+    coverMaxHeight = coverView.heightAnchor.constraint(lessThanOrEqualToConstant: 600)
     NSLayoutConstraint.activate([
       scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
       scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -1399,8 +1430,12 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
       stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48),
       stack.widthAnchor.constraint(lessThanOrEqualToConstant: 560),
       cover,
+      coverView.widthAnchor.constraint(lessThanOrEqualTo: coverRow.widthAnchor),
       coverView.heightAnchor.constraint(equalTo: coverView.widthAnchor),
-      coverView.heightAnchor.constraint(lessThanOrEqualTo: view.heightAnchor, multiplier: 0.45),
+      coverMaxHeight!,
+      coverView.centerXAnchor.constraint(equalTo: coverRow.centerXAnchor),
+      coverView.topAnchor.constraint(equalTo: coverRow.topAnchor),
+      coverView.bottomAnchor.constraint(equalTo: coverRow.bottomAnchor),
       ratingView.heightAnchor.constraint(equalToConstant: 36),
       playButton.widthAnchor.constraint(equalToConstant: 72),
       playButton.heightAnchor.constraint(equalToConstant: 72),
@@ -1417,41 +1452,49 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
   @objc
   private func remoteChanged() { refresh() }
 
+  /// last applied button state – buttons/menus are only rebuilt on changes (no flicker while polling)
+  private var renderedKey: String?
+
   private func refresh() {
     let np = BlackboxNowPlaying.current()
-    remoteBadge.isHidden = !np.isRemote
-    remoteBadge.text = "📺  Spielt auf \(RemoteSession.shared.deviceName ?? "FireTV")"
-    titleLabel.text = np.title
-    artistLabel.text = np.artist
-    symbol(playButton, np.isPlaying ? "pause.fill" : "play.fill", size: 44, label: np.isPlaying ? "Pause" : "Wiedergabe")
-    symbol(shuffleButton, "shuffle", size: 17, label: "Zufall", filled: np.isShuffle)
-    let repeatName = np.repeatMode == .single ? "repeat.1" : "repeat"
-    symbol(repeatButton, repeatName, size: 17, label: "Wiederholen", filled: np.repeatMode != .off)
-    if np.isRemote {
-      symbol(devicesButton, "tv.fill", size: 20, label: "Wiedergabegerät")
-      devicesButton.configuration?.baseForegroundColor = view.tintColor
-    } else {
-      symbol(devicesButton, "airplayaudio", size: 20, label: "Wiedergabegerät")
-    }
-
+    remoteBadge.isHidden = true
+    if titleLabel.text != np.title { titleLabel.text = np.title }
+    if artistLabel.text != np.artist { artistLabel.text = np.artist }
     let song = np.song
-    favoriteButton.isEnabled = song != nil
-    symbol(favoriteButton, (song?.isFavorite ?? false) ? "heart.fill" : "heart", size: 22, weight: .regular, label: "Favorit")
-    if song?.isFavorite == true { favoriteButton.configuration?.baseForegroundColor = .redHeart }
-    ratingView.isRatingEnabled = song != nil
-    ratingView.setRating(song?.rating ?? 0)
-    if let song {
-      optionsButton.isEnabled = true
-      optionsButton.menu = UIMenu.lazyMenu { [weak self] in
-        guard let self else { return [] }
-        return EntityPreviewActionBuilder(container: song, on: self).createMenuActions()
-      }
-    } else {
-      optionsButton.isEnabled = false
+    let key = [
+      "\(np.isPlaying)", "\(np.isShuffle)", "\(np.repeatMode.rawValue)", "\(np.isRemote)",
+      song?.id ?? "-", "\(song?.isFavorite ?? false)", "\(song?.rating ?? 0)", "\(np.hasItem)",
+    ].joined(separator: "|")
+    if key != renderedKey {
+      renderedKey = key
+      symbol(playButton, np.isPlaying ? "pause.fill" : "play.fill", size: 44, label: np.isPlaying ? "Pause" : "Wiedergabe")
+      symbol(shuffleButton, "shuffle", size: 17, label: "Zufall", filled: np.isShuffle)
+      let repeatName = np.repeatMode == .single ? "repeat.1" : "repeat"
+      symbol(repeatButton, repeatName, size: 17, label: "Wiederholen", filled: np.repeatMode != .off)
+      var dc = UIButton.Configuration.plain()
+      dc.image = UIImage(
+        systemName: np.isRemote ? "tv.fill" : "airplayaudio",
+        withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+      )
+      dc.baseForegroundColor = np.isRemote ? view.tintColor : .white
+      devicesButton.configuration = dc
+      devicesButton.accessibilityLabel = np.isRemote
+        ? "Wiedergabe auf \(RemoteSession.shared.deviceName ?? "FireTV")" : "Wiedergabegerät"
+
+      favoriteButton.isEnabled = song != nil
+      var fc = UIButton.Configuration.plain()
+      fc.image = UIImage(
+        systemName: (song?.isFavorite ?? false) ? "heart.fill" : "heart",
+        withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
+      )
+      fc.baseForegroundColor = (song?.isFavorite ?? false) ? .redHeart : .white
+      favoriteButton.configuration = fc
+      ratingView.isRatingEnabled = song != nil
+      ratingView.setRating(song?.rating ?? 0)
+      optionsButton.isEnabled = song != nil
+      lyricsButton.isEnabled = !np.isRemote
+      queueButton.isEnabled = true
     }
-    sleepButton.menu = UIMenu(children: [appDelegateRef.createSleepTimerMenu(refreshCB: nil)])
-    lyricsButton.isEnabled = !np.isRemote
-    queueButton.isEnabled = !np.isRemote
 
     refreshTime(np)
 
@@ -1628,7 +1671,7 @@ final class DevicePickerVC: UITableViewController {
   }
 
   override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-    section == 1 ? "Solange ein FireTV gewählt ist, steuert das iPhone nur noch den FireTV – es spielt selbst nichts ab. Blackbox muss auf dem FireTV geöffnet sein." : nil
+    section == 1 ? "Solange ein FireTV gewählt ist, steuert das iPhone nur noch den FireTV – es spielt selbst nichts ab. Der FireTV muss nur an sein (FireLauncher) – ohne Launcher muss Blackbox auf dem FireTV geöffnet sein." : nil
   }
 
   override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -1916,17 +1959,30 @@ final class CoverGradientBackgroundView: UIView {
     gradient.frame = bounds
   }
 
+  private var lastColor: UIColor?
+
+  override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+    super.traitCollectionDidChange(previous)
+    apply(color: lastColor)
+  }
+
+  /// Cover color over the whole screen (incl. the song list), fading into the background
   func apply(color: UIColor?) {
+    lastColor = color
     guard let color else {
       gradient.colors = nil
       return
     }
-    gradient.colors = [
-      color.withAlphaComponent(0.75).cgColor,
-      color.withAlphaComponent(0.35).cgColor,
-      UIColor.clear.cgColor,
-    ]
-    gradient.locations = [0, 0.45, 1]
+    let bg = UIColor.systemBackground.resolvedColor(with: traitCollection)
+    func blend(_ t: CGFloat) -> CGColor {
+      var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+      var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+      color.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+      bg.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+      return UIColor(red: r1 + (r2 - r1) * t, green: g1 + (g2 - g1) * t, blue: b1 + (b2 - b1) * t, alpha: 1).cgColor
+    }
+    gradient.colors = [blend(0.15), blend(0.45), blend(0.72)]
+    gradient.locations = [0, 0.4, 1]
   }
 }
 
@@ -1936,6 +1992,9 @@ extension UITableViewController {
     let bg = (tableView.backgroundView as? CoverGradientBackgroundView) ?? CoverGradientBackgroundView()
     tableView.backgroundView = bg
     tableView.backgroundColor = .clear
+    // song rows transparent, so the cover color covers the whole screen
+    UITableViewCell.appearance(whenContainedInInstancesOf: [AlbumDetailVC.self]).backgroundColor = .clear
+    UITableViewCell.appearance(whenContainedInInstancesOf: [PlaylistDetailVC.self]).backgroundColor = .clear
     let delegate = UIApplication.shared.delegate as! AppDelegate
     func setColor(from image: UIImage?) {
       guard let image, let colors = try? image.dominantColors(max: 1), let c = colors.first else { return }
@@ -1958,5 +2017,66 @@ extension UITableViewController {
       artworkDisplayPreference: setting.artworkDisplayPreference,
       useCache: false
     ))
+  }
+}
+
+
+// MARK: - RemoteQueueVC
+
+/// Queue of the FireTV ("Als Nächstes"), tap = jump to the song.
+final class RemoteQueueVC: UITableViewController {
+  private var entries: [FireTVQueueEntry] = []
+  private var current: Int?
+
+  init() { super.init(style: .insetGrouped) }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Warteschlange – \(RemoteSession.shared.deviceName ?? "FireTV")"
+    tableView.register(UITableViewCell.self, forCellReuseIdentifier: "q")
+    NotificationCenter.default.addObserver(self, selector: #selector(reload), name: RemoteSession.changedNotification, object: nil)
+    reload()
+  }
+
+  @objc
+  private func reload() {
+    let s = RemoteSession.shared.status
+    let new = s?.queue ?? []
+    let newCurrent = s?.queueIndex
+    guard new != entries || newCurrent != current else { return }
+    let first = entries.isEmpty
+    entries = new
+    current = newCurrent
+    tableView.reloadData()
+    if first, let cur = current, let row = entries.firstIndex(where: { $0.index == cur }) {
+      tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .top, animated: false)
+    }
+  }
+
+  override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { entries.count }
+
+  override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+    entries.isEmpty ? "Die Warteschlange ist leer oder der FireTV antwortet nicht." : nil
+  }
+
+  override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    let cell = tableView.dequeueReusableCell(withIdentifier: "q", for: indexPath)
+    let e = entries[indexPath.row]
+    var c = UIListContentConfiguration.subtitleCell()
+    c.text = e.title
+    c.secondaryText = e.artist
+    let isCurrent = e.index == current
+    c.textProperties.color = isCurrent ? .tintColor : .label
+    c.textProperties.font = .systemFont(ofSize: 17, weight: isCurrent ? .semibold : .regular)
+    c.image = UIImage(systemName: isCurrent ? "speaker.wave.2.fill" : "music.note")
+    c.imageProperties.tintColor = isCurrent ? .tintColor : .secondaryLabel
+    cell.contentConfiguration = c
+    return cell
+  }
+
+  override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    RemoteSession.shared.remoteCommand("jump", value: Double(entries[indexPath.row].index))
   }
 }

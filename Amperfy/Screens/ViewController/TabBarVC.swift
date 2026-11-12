@@ -154,7 +154,7 @@ class TabBarVC: UITabBarController {
     let accessory = UITabAccessory(contentView: blackboxMini)
     bottomAccessory = accessory
 
-    heightConstraint = blackboxMini.heightAnchor.constraint(equalToConstant: 56.0)
+    heightConstraint = blackboxMini.heightAnchor.constraint(equalToConstant: 48.0)
     heightConstraint?.isActive = true
     compactWidthConstraint = blackboxMini.widthAnchor
       .constraint(equalTo: blackboxMini.superview!.widthAnchor)
@@ -211,14 +211,15 @@ class TabBarVC: UITabBarController {
         .constraint(equalToConstant: playerWidth)
       regularWidthConstraint?.isActive = true
       centerConstraint?.isActive = true
-      heightConstraint?.constant = 64.0
+      heightConstraint?.constant = 60.0
     } else if isInline {
       heightConstraint?.constant = 44.0
       centerConstraint?.isActive = false
       regularWidthConstraint?.isActive = false
       compactWidthConstraint?.isActive = true
     } else {
-      heightConstraint?.constant = 56.0
+      // Standardhöhe des Tab-Zubehörs – größer rückt der Mini-Player zu nah an die Tab-Leiste
+      heightConstraint?.constant = 48.0
       centerConstraint?.isActive = false
       regularWidthConstraint?.isActive = false
       compactWidthConstraint?.isActive = true
@@ -1102,7 +1103,7 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
     NSLayoutConstraint.activate([
       artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
       artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
-      artwork.heightAnchor.constraint(equalTo: heightAnchor, constant: -12),
+      artwork.heightAnchor.constraint(equalTo: heightAnchor, constant: -14),
       artwork.widthAnchor.constraint(equalTo: artwork.heightAnchor),
       texts.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 10),
       texts.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -1282,7 +1283,46 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     let swipe = UISwipeGestureRecognizer(target: self, action: #selector(close))
     swipe.direction = .down
     view.addGestureRecognizer(swipe)
+    // Titel antippen -> Album, Interpret antippen -> Interpreten-Seite
+    titleLabel.isUserInteractionEnabled = true
+    titleLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAlbum)))
+    titleLabel.accessibilityTraits.insert(.button)
+    titleLabel.accessibilityHint = "Öffnet das Album"
+    artistLabel.isUserInteractionEnabled = true
+    artistLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openArtist)))
+    artistLabel.accessibilityTraits.insert(.button)
+    artistLabel.accessibilityHint = "Öffnet den Interpreten"
     refresh()
+  }
+
+  private func navigate(to makeVC: @escaping @MainActor () -> UIViewController?) {
+    guard let vc = makeVC() else {
+      UINotificationFeedbackGenerator().notificationOccurred(.warning)
+      return
+    }
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    let delegate = appDelegateRef
+    dismiss(animated: true) {
+      delegate.displayInLibraryTab(vc: vc)
+    }
+  }
+
+  @objc
+  private func openAlbum() {
+    guard let song = BlackboxNowPlaying.current().song else { return }
+    navigate {
+      guard let album = song.album, let account = album.account else { return nil }
+      return AppStoryboard.Main.segueToAlbumDetail(account: account, album: album, songToScrollTo: song)
+    }
+  }
+
+  @objc
+  private func openArtist() {
+    guard let song = BlackboxNowPlaying.current().song else { return }
+    navigate {
+      guard let artist = song.artist ?? song.album?.artist, let account = artist.account else { return nil }
+      return AppStoryboard.Main.segueToArtistDetail(account: account, artist: artist)
+    }
   }
 
   private var coverMaxHeight: NSLayoutConstraint?

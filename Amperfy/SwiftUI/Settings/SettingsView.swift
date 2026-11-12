@@ -400,6 +400,9 @@ struct BlackboxRequestClient: Sendable {
     let (data, response) = try await URLSession.shared.data(for: req)
     let code = (response as? HTTPURLResponse)?.statusCode ?? 0
     if code == 401 { throw ClientError.unauthorized }
+    if code == 404, ["/api/discover", "/api/genre", "/api/events"].contains(where: { path.hasPrefix($0) }) {
+      throw ClientError.server("Blackbox Request ist veraltet – bitte den Container auf dem NAS neu bauen.")
+    }
     guard (200 ..< 300).contains(code) else {
       let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"] as? String
       throw ClientError.server(detail ?? "Serverfehler (\(code))")
@@ -1434,5 +1437,454 @@ struct NavidromeScanSection: View {
       }
       running = false
     }
+  }
+}
+
+// MARK: - Interpreten-Seite (Blackbox): Infos, Top-Songs, Top-Alben, Alben/Singles quer scrollbar
+
+@MainActor
+final class BlackboxArtistModel: ObservableObject {
+  struct AlbumInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let year: Int?
+    let cover: URL?
+    let playCount: Int
+    let songCount: Int
+    let releaseTypes: [String]
+  }
+
+  struct TopSong: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let album: String
+    let cover: URL?
+  }
+
+  struct Similar: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let image: URL?
+  }
+
+  let artist: Artist
+  let account: Account
+  @Published var bio: String?
+  @Published var image: URL?
+  @Published var albums: [AlbumInfo] = []
+  @Published var topSongs: [TopSong] = []
+  @Published var similar: [Similar] = []
+  @Published var loaded = false
+
+  private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  init(artist: Artist, account: Account) {
+    self.artist = artist
+    self.account = account
+  }
+
+  private func call(_ action: String, _ query: [URLQueryItem]) async -> [String: Any]? {
+    let api = delegate.getMeta(account.info).backendApi
+    guard let url = try? await api.generateUrl(forAction: action, query: [URLQueryItem(name: "f", value: "json")] + query)
+    else { return nil }
+    var req = URLRequest(url: url, timeoutInterval: 20)
+    for (k, v) in api.httpHeaders { req.setValue(v, forHTTPHeaderField: k) }
+    guard let data = try? await URLSession.shared.data(for: req).0,
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let resp = json["subsonic-response"] as? [String: Any], resp["status"] as? String == "ok"
+    else { return nil }
+    return resp
+  }
+
+  private func cover(_ id: String?) async -> URL? {
+    guard let id, !id.isEmpty else { return nil }
+    return try? await delegate.getMeta(account.info).backendApi.generateUrl(forArtworkId: id)
+  }
+
+  func load() async {
+    guard !loaded else { return }
+    // Alben/Songs des Interpreten in die lokale Datenbank holen (für Wiedergabe und Album-Seiten)
+    Task {
+      try? await artist.fetch(
+        storage: delegate.storage,
+        librarySyncer: delegate.getMeta(account.info).librarySyncer,
+        playableDownloadManager: delegate.getMeta(account.info).playableDownloadManager
+      )
+    }
+    let id = artist.id
+    if let a = await call("getArtist", [URLQueryItem(name: "id", value: id)])?["artist"] as? [String: Any] {
+      var list: [AlbumInfo] = []
+      for al in a["album"] as? [[String: Any]] ?? [] {
+        guard let aid = al["id"] as? String else { continue }
+        list.append(AlbumInfo(
+          id: aid, name: al["name"] as? String ?? "", year: al["year"] as? Int, cover: await cover(al["coverArt"] as? String),
+          playCount: al["playCount"] as? Int ?? 0, songCount: al["songCount"] as? Int ?? 0,
+          releaseTypes: (al["releaseTypes"] as? [String] ?? []).map { $0.lowercased() }
+        ))
+      }
+      albums = list.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
+    }
+    if let info = await call("getArtistInfo2", [URLQueryItem(name: "id", value: id), URLQueryItem(name: "count", value: "15")])?["artistInfo2"] as? [String: Any] {
+      if let b = info["biography"] as? String {
+        let plain = b.replacingOccurrences(of: "<a[^>]*>.*?</a>", with: "", options: .regularExpression)
+          .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+          .replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&quot;", with: "\"")
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        bio = plain.isEmpty ? nil : plain
+      }
+      if let s = (info["largeImageUrl"] as? String) ?? (info["mediumImageUrl"] as? String), !s.isEmpty,
+         !s.contains("2a96cbd8b46e442fc41c2b86b821562f") { // Last.fm-Platzhalterbild
+        image = URL(string: s)
+      }
+      var sims: [Similar] = []
+      for s in info["similarArtist"] as? [[String: Any]] ?? [] {
+        guard let sid = s["id"] as? String, !sid.isEmpty, sid != "-1" else { continue }
+        let img = (s["artistImageUrl"] as? String).flatMap(URL.init(string:))
+        sims.append(Similar(id: sid, name: s["name"] as? String ?? "", image: img ?? (await cover(s["coverArt"] as? String))))
+      }
+      similar = sims
+    }
+    if image == nil, let first = albums.first { image = first.cover }
+    // Top-Songs: Last.fm über Navidrome, sonst die meistgespielten Songs aus der eigenen Mediathek
+    var songs: [[String: Any]] = (await call("getTopSongs", [URLQueryItem(name: "artist", value: artist.name), URLQueryItem(name: "count", value: "20")])?["topSongs"] as? [String: Any])?["song"] as? [[String: Any]] ?? []
+    if songs.isEmpty {
+      let found = (await call("search3", [URLQueryItem(name: "query", value: artist.name), URLQueryItem(name: "songCount", value: "200"),
+                                          URLQueryItem(name: "albumCount", value: "0"), URLQueryItem(name: "artistCount", value: "0")])?["searchResult3"] as? [String: Any])?["song"] as? [[String: Any]] ?? []
+      songs = found.filter { ($0["artistId"] as? String) == id || ($0["artist"] as? String)?.lowercased() == artist.name.lowercased() }
+        .sorted { ($0["playCount"] as? Int ?? 0) > ($1["playCount"] as? Int ?? 0) }
+    }
+    var tops: [TopSong] = []
+    var seenTitles = Set<String>()
+    for s in songs {
+      guard let sid = s["id"] as? String, let title = s["title"] as? String, !seenTitles.contains(title.lowercased()) else { continue }
+      seenTitles.insert(title.lowercased())
+      tops.append(TopSong(id: sid, title: title, album: s["album"] as? String ?? "", cover: await cover(s["coverArt"] as? String)))
+      if tops.count == 12 { break }
+    }
+    topSongs = tops
+    loaded = true
+  }
+
+  /// Song-Objekte für die Wiedergabe (fehlende Alben werden nachgeladen)
+  func playables(for ids: [String]) async -> [AbstractPlayable] {
+    let lib = delegate.storage.main.library
+    var result: [Song] = []
+    for sid in ids {
+      if let s = lib.getSong(for: account, id: sid) {
+        result.append(s)
+      }
+    }
+    if result.count < ids.count {
+      try? await artist.fetch(
+        storage: delegate.storage,
+        librarySyncer: delegate.getMeta(account.info).librarySyncer,
+        playableDownloadManager: delegate.getMeta(account.info).playableDownloadManager
+      )
+      for al in artist.albums where al.songs.isEmpty {
+        try? await delegate.getMeta(account.info).librarySyncer.sync(album: al)
+      }
+      result = ids.compactMap { lib.getSong(for: account, id: $0) }
+    }
+    return result
+  }
+
+  func playTop(from index: Int) {
+    let ids = topSongs.map(\.id)
+    Task {
+      let songs = await playables(for: ids)
+      guard !songs.isEmpty else { return }
+      let start = songs.firstIndex { $0.id == ids[index] } ?? 0
+      delegate.player.play(context: PlayContext(name: "Top-Songs: \(artist.name)", index: start, playables: songs))
+    }
+  }
+
+  func playAll(shuffled: Bool) {
+    Task {
+      try? await artist.fetch(
+        storage: delegate.storage,
+        librarySyncer: delegate.getMeta(account.info).librarySyncer,
+        playableDownloadManager: delegate.getMeta(account.info).playableDownloadManager
+      )
+      var songs = artist.playables.filterSongs()
+      if songs.isEmpty {
+        for al in artist.albums { try? await delegate.getMeta(account.info).librarySyncer.sync(album: al) }
+        songs = artist.playables.filterSongs()
+      }
+      guard !songs.isEmpty else { return }
+      let ctx = PlayContext(containable: artist, playables: songs.sortByAlbum())
+      shuffled ? delegate.player.playShuffled(context: ctx) : delegate.player.play(context: ctx)
+    }
+  }
+}
+
+struct BlackboxArtistView: View {
+  @ObservedObject var model: BlackboxArtistModel
+  var openAlbum: (String) -> Void
+  var openArtist: (String) -> Void
+  var openAllSongs: () -> Void
+  @State private var bioExpanded = false
+
+  private var topAlbums: [BlackboxArtistModel.AlbumInfo] {
+    Array(model.albums.filter { $0.playCount > 0 }.sorted { $0.playCount > $1.playCount }.prefix(10))
+  }
+
+  private func isSingle(_ a: BlackboxArtistModel.AlbumInfo) -> Bool {
+    if !a.releaseTypes.isEmpty { return a.releaseTypes.contains("single") || a.releaseTypes.contains("ep") }
+    return a.songCount > 0 && a.songCount <= 4
+  }
+
+  private func isCompilation(_ a: BlackboxArtistModel.AlbumInfo) -> Bool {
+    a.releaseTypes.contains("compilation")
+  }
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 26) {
+        header
+        if !model.topSongs.isEmpty { topSongsShelf }
+        if topAlbums.count >= 2 { albumShelf("Top-Alben", topAlbums) }
+        let regular = model.albums.filter { !isSingle($0) && !isCompilation($0) }
+        if !regular.isEmpty { albumShelf("Alben", regular) }
+        let singles = model.albums.filter(isSingle)
+        if !singles.isEmpty { albumShelf("Singles & EPs", singles) }
+        let comps = model.albums.filter(isCompilation)
+        if !comps.isEmpty { albumShelf("Compilations", comps) }
+        aboutSection
+        if !model.similar.isEmpty { similarShelf }
+        Button(action: openAllSongs) {
+          Label("Alle Titel und Alben als Liste", systemImage: "list.bullet")
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 24)
+      }
+    }
+    .overlay { if !model.loaded, model.albums.isEmpty { ProgressView() } }
+    .task { await model.load() }
+  }
+
+  // MARK: Kopf mit Bild, Name, Abspielen/Zufall
+
+  private var header: some View {
+    ZStack(alignment: .bottomLeading) {
+      GeometryReader { geo in
+        AsyncImage(url: model.image) { phase in
+          if let img = phase.image {
+            img.resizable().scaledToFill()
+          } else {
+            Color(uiColor: .secondarySystemFill)
+          }
+        }
+        .frame(width: geo.size.width, height: geo.size.height)
+        .clipped()
+      }
+      LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+      HStack(alignment: .bottom) {
+        Text(model.artist.name)
+          .font(.largeTitle.bold())
+          .foregroundStyle(.white)
+          .lineLimit(2)
+          .minimumScaleFactor(0.6)
+        Spacer()
+        Button { model.playAll(shuffled: true) } label: {
+          Image(systemName: "shuffle").font(.title3.weight(.semibold)).frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .background(.ultraThinMaterial, in: Circle())
+        .accessibilityLabel("Zufallswiedergabe")
+        Button { model.playAll(shuffled: false) } label: {
+          Image(systemName: "play.fill").font(.title2.weight(.semibold)).frame(width: 56, height: 56)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.black)
+        .background(Color.white, in: Circle())
+        .accessibilityLabel("Abspielen")
+      }
+      .padding(16)
+    }
+    .frame(height: 340)
+    .clipped()
+  }
+
+  private func sectionTitle(_ t: String) -> some View {
+    Text(t).font(.title2.bold()).padding(.horizontal, 16)
+  }
+
+  // MARK: Top-Songs: 4 Zeilen, seitlich weiterblättern
+
+  private var topSongsShelf: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      sectionTitle("Top-Songs")
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHGrid(rows: Array(repeating: GridItem(.fixed(56), spacing: 4), count: min(4, model.topSongs.count)), spacing: 16) {
+          ForEach(Array(model.topSongs.enumerated()), id: \.element.id) { i, s in
+            Button { model.playTop(from: i) } label: {
+              HStack(spacing: 12) {
+                AsyncImage(url: s.cover) { p in
+                  if let img = p.image { img.resizable().scaledToFill() } else { Color(uiColor: .secondarySystemFill) }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Text("\(i + 1)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary).frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(s.title).foregroundStyle(.primary).lineLimit(1)
+                  Text(s.album).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+              }
+              .containerRelativeFrame(.horizontal, alignment: .leading) { w, _ in w * 0.82 }
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+          }
+        }
+        .scrollTargetLayout()
+        .padding(.horizontal, 16)
+      }
+      .scrollTargetBehavior(.viewAligned)
+    }
+  }
+
+  private func albumShelf(_ title: String, _ items: [BlackboxArtistModel.AlbumInfo]) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      sectionTitle(title)
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 14) {
+          ForEach(items) { a in
+            Button { openAlbum(a.id) } label: {
+              VStack(alignment: .leading, spacing: 3) {
+                AsyncImage(url: a.cover) { p in
+                  if let img = p.image { img.resizable().scaledToFill() } else { Color(uiColor: .secondarySystemFill) }
+                }
+                .frame(width: 150, height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(a.name).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+                Text(a.year.map(String.init) ?? " ").font(.caption).foregroundStyle(.secondary)
+              }
+              .frame(width: 150, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+          }
+        }
+        .padding(.horizontal, 16)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var aboutSection: some View {
+    let songs = model.albums.reduce(0) { $0 + $1.songCount }
+    VStack(alignment: .leading, spacing: 8) {
+      sectionTitle("Über \(model.artist.name)")
+      VStack(alignment: .leading, spacing: 8) {
+        Text("\(model.albums.count) \(model.albums.count == 1 ? "Album" : "Alben") · \(songs) Songs in deiner Mediathek")
+          .font(.subheadline.weight(.semibold))
+        if let bio = model.bio {
+          Text(bio)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(bioExpanded ? nil : 5)
+          Button(bioExpanded ? "Weniger" : "Mehr") { withAnimation { bioExpanded.toggle() } }
+            .font(.subheadline.weight(.semibold))
+        } else if model.loaded {
+          Text("Keine Biografie verfügbar (in Navidrome einen Last.fm-API-Key hinterlegen).")
+            .font(.footnote).foregroundStyle(.secondary)
+        }
+      }
+      .padding(16)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .padding(.horizontal, 16)
+    }
+  }
+
+  private var similarShelf: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      sectionTitle("Ähnliche Interpreten")
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 14) {
+          ForEach(model.similar) { s in
+            Button { openArtist(s.id) } label: {
+              VStack(spacing: 6) {
+                AsyncImage(url: s.image) { p in
+                  if let img = p.image { img.resizable().scaledToFill() } else {
+                    ZStack { Color(uiColor: .secondarySystemFill); Image(systemName: "music.mic").foregroundStyle(.secondary) }
+                  }
+                }
+                .frame(width: 110, height: 110)
+                .clipShape(Circle())
+                Text(s.name).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+              }
+              .frame(width: 110)
+            }
+            .buttonStyle(.plain)
+          }
+        }
+        .padding(.horizontal, 16)
+      }
+    }
+  }
+}
+
+final class BlackboxArtistVC: UIHostingController<BlackboxArtistView> {
+  private let artist: Artist
+  private let account: Account
+
+  init(account: Account, artist: Artist) {
+    self.artist = artist
+    self.account = account
+    let model = BlackboxArtistModel(artist: artist, account: account)
+    weak var weakSelf: BlackboxArtistVC?
+    super.init(rootView: BlackboxArtistView(
+      model: model,
+      openAlbum: { id in weakSelf?.openAlbum(id) },
+      openArtist: { id in weakSelf?.openArtist(id) },
+      openAllSongs: { weakSelf?.openList() }
+    ))
+    weakSelf = self
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = artist.name
+    navigationItem.largeTitleDisplayMode = .never
+    let options = UIBarButtonItem.createOptionsBarButton()
+    options.menu = UIMenu.lazyMenu { [weak self] in
+      guard let self else { return [] }
+      return EntityPreviewActionBuilder(container: self.artist, on: self).createMenuActions()
+    }
+    navigationItem.rightBarButtonItem = options
+  }
+
+  private func openAlbum(_ id: String) {
+    let lib = delegate.storage.main.library
+    if let album = lib.getAlbum(for: account, id: id, isDetailFaultResolution: true) {
+      navigationController?.pushViewController(AppStoryboard.Main.segueToAlbumDetail(account: account, album: album), animated: true)
+      return
+    }
+    Task {
+      try? await artist.fetch(
+        storage: delegate.storage,
+        librarySyncer: delegate.getMeta(account.info).librarySyncer,
+        playableDownloadManager: delegate.getMeta(account.info).playableDownloadManager
+      )
+      if let album = lib.getAlbum(for: account, id: id, isDetailFaultResolution: true) {
+        navigationController?.pushViewController(AppStoryboard.Main.segueToAlbumDetail(account: account, album: album), animated: true)
+      }
+    }
+  }
+
+  private func openArtist(_ id: String) {
+    guard let other = delegate.storage.main.library.getArtist(for: account, id: id) else { return }
+    navigationController?.pushViewController(AppStoryboard.Main.segueToArtistDetail(account: account, artist: other), animated: true)
+  }
+
+  private func openList() {
+    navigationController?.pushViewController(ArtistDetailVC(account: account, artist: artist), animated: true)
   }
 }

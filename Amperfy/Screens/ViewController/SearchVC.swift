@@ -798,6 +798,30 @@ class SearchVC: BasicTableViewController {
             .prefix(upToAsArray: Self.categoryItemLimit)
             .compactMap { $0 as? Song }
             .compactMap { $0.managedObject.objectID }
+            // Blackbox: tolerante Suche ("suicide boys" findet "$uicideboy$", "ac dc" findet "AC/DC")
+            let loose = blackboxLoose(searchText)
+            if loose.count >= 3 {
+              let looseArtists = asyncCompanion.library.getArtists(for: accountAsync)
+                .filter { blackboxLoose($0.name).contains(loose) }
+                .prefix(10)
+              let artistIDs = Set(looseArtists.map(\.id))
+              let looseAlbums = asyncCompanion.library.getAlbums(for: accountAsync)
+                .filter { blackboxLoose($0.name).contains(loose) || ($0.artist.map { artistIDs.contains($0.id) } ?? false) }
+                .prefix(30)
+              var looseSongs: [Song] = []
+              for artist in looseArtists.prefix(3) {
+                looseSongs += asyncCompanion.library.searchSongs(
+                  for: accountAsync, searchText: artist.name, onlyCached: false, displayFilter: .all
+                ).filter { ($0.artist.map { artistIDs.contains($0.id) } ?? false) }
+              }
+              func merge(_ existing: [NSManagedObjectID], _ extra: [NSManagedObjectID]) -> [NSManagedObjectID] {
+                var seen = Set(existing)
+                return existing + extra.filter { seen.insert($0).inserted }
+              }
+              result.artistsIDs = merge(result.artistsIDs, looseArtists.map { $0.managedObject.objectID })
+              result.albumsIDs = merge(result.albumsIDs, looseAlbums.map { $0.managedObject.objectID })
+              result.songsIDs = merge(result.songsIDs, looseSongs.prefix(Self.categoryItemLimit).map { $0.managedObject.objectID })
+            }
             return result
           }
 
@@ -935,6 +959,15 @@ class SearchVC: BasicTableViewController {
     config.secondaryText = "Your search history will appear here."
     return config
   }()
+}
+
+/// Vergleichsform für die tolerante Suche: Kleinbuchstaben, ohne Akzente/Leer- und Sonderzeichen, $ -> s, & -> and
+func blackboxLoose(_ s: String) -> String {
+  let folded = s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    .replacingOccurrences(of: "$", with: "s")
+    .replacingOccurrences(of: "&", with: "and")
+    .replacingOccurrences(of: "+", with: "and")
+  return String(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(Character.init)).lowercased()
 }
 
 extension UIFont {

@@ -155,6 +155,10 @@ enum AppStoryboard: String {
     albumToScrollTo: Album? = nil
   )
     -> UIViewController {
+    // Blackbox: neue Interpreten-Seite (Infos, Top-Songs, Alben quer scrollbar)
+    if albumToScrollTo == nil {
+      return BlackboxArtistVC(account: account, artist: artist)
+    }
     let artistDetailVC = ArtistDetailVC(account: account, artist: artist)
     artistDetailVC.albumToScrollTo = albumToScrollTo
     return artistDetailVC

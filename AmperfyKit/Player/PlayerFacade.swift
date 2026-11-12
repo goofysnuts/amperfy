@@ -115,7 +115,7 @@ public enum PlayerRemote {
 public struct PlayContext {
   let index: Int
   let name: String
-  let playables: [AbstractPlayable]
+  public let playables: [AbstractPlayable]
   let type: PlayerMode
   public var isKeepIndexDuringShuffle: Bool = false
 

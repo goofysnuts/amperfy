@@ -1498,11 +1498,11 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
 
     refreshTime(np)
 
-    let key = (np.coverArtId ?? "") + (np.playable?.id ?? "")
-    if key != lastArtworkKey {
-      lastArtworkKey = key
+    let artKey = (np.coverArtId ?? "") + (np.playable?.id ?? "")
+    if artKey != lastArtworkKey {
+      lastArtworkKey = artKey
       np.loadArtwork { [weak self] image in
-        guard let self, self.lastArtworkKey == key else { return }
+        guard let self, self.lastArtworkKey == artKey else { return }
         UIView.transition(with: self.coverView, duration: 0.3, options: .transitionCrossDissolve) {
           self.coverView.image = image
         }

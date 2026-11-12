@@ -717,6 +717,34 @@ class SubsonicLibrarySyncer: CommonLibrarySyncer, LibrarySyncer {
   }
 
   @MainActor
+  func syncFrequentAlbums(offset: Int, count: Int) async throws -> [String] {
+    guard isSyncAllowed else { return [] }
+    os_log("Sync frequent albums: offset: %i count: %i", log: log, type: .info, offset, count)
+    let response = try await subsonicServerApi.requestFrequentAlbums(offset: offset, count: count)
+    return try await storage.async.performAndGet { asyncCompanion in
+      let accountAsync = asyncCompanion.library.getAccount(managedObjectId: self.accountObjectId)
+      let idParserDelegate = SsIDsParserDelegate(performanceMonitor: self.performanceMonitor)
+      try self.parse(
+        response: response,
+        delegate: idParserDelegate,
+        isThrowingErrorsAllowed: false
+      )
+      let prefetch = asyncCompanion.library.getElements(
+        account: accountAsync,
+        prefetchIDs: idParserDelegate.prefetchIDs
+      )
+
+      let parserDelegate = SsAlbumParserDelegate(
+        performanceMonitor: self.performanceMonitor, prefetch: prefetch, account: accountAsync,
+        library: asyncCompanion.library
+      )
+      try self.parse(response: response, delegate: parserDelegate)
+      // play count order is only kept in memory, no Core Data model change needed
+      return parserDelegate.parsedAlbums.map { $0.id }
+    }
+  }
+
+  @MainActor
   func syncFavoriteLibraryElements() async throws {
     guard isSyncAllowed else { return }
     let response = try await subsonicServerApi.requestFavoriteElements()

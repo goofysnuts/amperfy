@@ -151,6 +151,9 @@ public protocol LibrarySyncer: Sendable {
   func syncNewestAlbums(offset: Int, count: Int) async throws
   @MainActor
   func syncRecentAlbums(offset: Int, count: Int) async throws
+  /// Returns the IDs of the most frequently played albums, ordered by play count (FireSonic parity)
+  @MainActor
+  func syncFrequentAlbums(offset: Int, count: Int) async throws -> [String]
   @MainActor
   func syncNewestPodcastEpisodes() async throws
   @MainActor

@@ -649,6 +649,16 @@ final class SubsonicServerApi: URLCleanser, Sendable {
     }
   }
 
+  public func requestFrequentAlbums(offset: Int, count: Int) async throws -> APIDataResponse {
+    try await request { version in
+      var urlComp = try self.createAuthApiUrlComponent(version: version, forAction: "getAlbumList2")
+      urlComp.addQueryItem(name: "type", value: "frequent")
+      urlComp.addQueryItem(name: "size", value: count)
+      urlComp.addQueryItem(name: "offset", value: offset)
+      return try self.createUrl(from: urlComp)
+    }
+  }
+
   public func requestAlbums(offset: Int, count: Int) async throws -> APIDataResponse {
     try await request { version in
       var urlComp = try self.createAuthApiUrlComponent(version: version, forAction: "getAlbumList2")

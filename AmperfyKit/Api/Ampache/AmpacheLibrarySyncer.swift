@@ -829,6 +829,12 @@ class AmpacheLibrarySyncer: CommonLibrarySyncer, LibrarySyncer {
   }
 
   @MainActor
+  func syncFrequentAlbums(offset: Int, count: Int) async throws -> [String] {
+    // Frequently played albums are only supported for Subsonic/Navidrome servers
+    []
+  }
+
+  @MainActor
   func syncRecentAlbums(offset: Int, count: Int) async throws {
     guard isSyncAllowed else { return }
     os_log("Sync recent albums: offset: %i count: %i", log: log, type: .info, offset, count)

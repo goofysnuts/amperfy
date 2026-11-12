@@ -248,6 +248,11 @@ class HomeManager: NSObject {
         }
       }
     }
+    if orderedVisibleSections.contains(where: { $0 == .frequentAlbums }) {
+      Task { @MainActor in
+        await self.updateFrequentAlbums()
+      }
+    }
     if orderedVisibleSections.contains(where: { $0 == .lastTimePlayedPlaylists }) {
       Task { @MainActor in do {
         try await self.getMeta(self.account.info).librarySyncer
@@ -299,6 +304,22 @@ class HomeManager: NSObject {
           HomeItem(section: .newestAlbums, playableContainable: $0)
         }
       applySnapshotCB?()
+    }
+  }
+
+  func updateFrequentAlbums() async {
+    do {
+      let albumIds = try await getMeta(account.info).librarySyncer
+        .syncFrequentAlbums(offset: 0, count: Self.sectionMaxItemCount)
+      let albums = albumIds.compactMap {
+        storage.main.library.getAlbum(for: account, id: $0, isDetailFaultResolution: false)
+      }
+      data[.frequentAlbums] = albums.compactMap {
+        HomeItem(section: .frequentAlbums, playableContainable: $0)
+      }
+      applySnapshotCB?()
+    } catch {
+      eventLogger.report(topic: "Frequent Albums Sync", error: error)
     }
   }
 

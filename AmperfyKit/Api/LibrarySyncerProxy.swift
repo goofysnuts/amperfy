@@ -84,6 +84,10 @@ extension LibrarySyncerProxy: LibrarySyncer {
     try await activeSyncer.syncRecentAlbums(offset: offset, count: count)
   }
 
+  func syncFrequentAlbums(offset: Int, count: Int) async throws -> [String] {
+    try await activeSyncer.syncFrequentAlbums(offset: offset, count: count)
+  }
+
   @MainActor
   func syncNewestPodcastEpisodes() async throws {
     try await activeSyncer.syncNewestPodcastEpisodes()

@@ -1539,8 +1539,9 @@ final class BlackboxArtistModel: ObservableObject {
       var sims: [Similar] = []
       for s in info["similarArtist"] as? [[String: Any]] ?? [] {
         guard let sid = s["id"] as? String, !sid.isEmpty, sid != "-1" else { continue }
-        let img = (s["artistImageUrl"] as? String).flatMap(URL.init(string:))
-        sims.append(Similar(id: sid, name: s["name"] as? String ?? "", image: img ?? (await cover(s["coverArt"] as? String))))
+        var img = (s["artistImageUrl"] as? String).flatMap(URL.init(string:))
+        if img == nil { img = await cover(s["coverArt"] as? String) }
+        sims.append(Similar(id: sid, name: s["name"] as? String ?? "", image: img))
       }
       similar = sims
     }

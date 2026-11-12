@@ -21,6 +21,8 @@
 
 import AmperfyKit
 import CoreData
+import Combine
+import SwiftUI
 import UIKit
 
 // MARK: - SearchSection
@@ -112,6 +114,74 @@ class SearchVC: BasicTableViewController {
   }
 
   static let topHitsLimit = 4
+
+  // MARK: Blackbox Request: fehlende Alben direkt in der Suche anfragen
+
+  private let requestModel = BBRSearchModel()
+  private var requestHost: UIHostingController<BlackboxRequestInlineView>?
+  private var requestCancellable: AnyCancellable?
+
+  private func setupRequestFooter() {
+    let host = UIHostingController(rootView: BlackboxRequestInlineView(
+      model: requestModel,
+      onOpenAll: { [weak self] q in self?.openRequestSearch(q) },
+      onOpenAlbum: { [weak self] id in self?.openRequestAlbum(id) }
+    ))
+    host.view.backgroundColor = .clear
+    addChild(host)
+    host.didMove(toParent: self)
+    requestHost = host
+    requestCancellable = requestModel.objectWillChange
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        DispatchQueue.main.async { self?.layoutRequestFooter() }
+      }
+  }
+
+  private func updateRequestSearch(_ text: String) {
+    guard BlackboxRequestConfig.isConfigured else {
+      requestModel.search("")
+      layoutRequestFooter()
+      return
+    }
+    requestModel.search(isSearchActive || !text.isEmpty ? text : "")
+    layoutRequestFooter()
+  }
+
+  private func layoutRequestFooter() {
+    guard isViewLoaded, let host = requestHost else { return }
+    let show = BlackboxRequestConfig.isConfigured && requestModel.query.count >= 2
+    if !show {
+      if tableView.tableFooterView != nil { tableView.tableFooterView = nil }
+      return
+    }
+    let width = tableView.bounds.width > 0 ? tableView.bounds.width : view.bounds.width
+    let size = host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+    let height = ceil(size.height)
+    if tableView.tableFooterView !== host.view || abs(host.view.frame.height - height) > 0.5
+      || abs(host.view.frame.width - width) > 0.5 {
+      host.view.frame = CGRect(x: 0, y: 0, width: width, height: height)
+      tableView.tableFooterView = host.view
+    }
+    if isSearchActive, artists.isEmpty, albums.isEmpty, playlists.isEmpty, songs.isEmpty {
+      contentUnavailableConfiguration = nil
+    }
+  }
+
+  private func openRequestSearch(_ query: String) {
+    let vc = UIHostingController(rootView: BlackboxRequestSearchView(initialQuery: query))
+    present(vc, animated: true)
+  }
+
+  private func openRequestAlbum(_ id: String) {
+    let model = requestModel
+    let vc = UIHostingController(rootView: BBRAlbumSheet(albumId: id, onChange: { model.refresh() }))
+    if let sheet = vc.sheetPresentationController {
+      sheet.detents = [.medium(), .large()]
+      sheet.prefersGrabberVisible = true
+    }
+    present(vc, animated: true)
+  }
   private var category: SearchCategory = .top
   private var categoryButtons: [UIButton] = []
   private lazy var categoryBar: UIView = {
@@ -306,6 +376,7 @@ class SearchVC: BasicTableViewController {
       }
     }
     updateContentUnavailable()
+    setupRequestFooter()
     accountNotificationHandler = AccountNotificationHandler(
       storage: appDelegate.storage,
       notificationHandler: appDelegate.notificationHandler
@@ -323,6 +394,13 @@ class SearchVC: BasicTableViewController {
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     navigationController?.navigationBar.prefersLargeTitles = true
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    if let footer = tableView.tableFooterView, abs(footer.frame.width - tableView.bounds.width) > 0.5 {
+      layoutRequestFooter()
+    }
   }
 
   override func viewIsAppearing(_ animated: Bool) {
@@ -644,6 +722,7 @@ class SearchVC: BasicTableViewController {
   override func updateSearchResults(for searchController: UISearchController) {
     guard let searchText = searchController.searchBar.text, let accountObjectId else { return }
     searchTaskRunner.cancelAll()
+    updateRequestSearch(searchText)
     if !searchText.isEmpty, !searchController.searchBar.isCachedScopeSelected {
       searchTaskRunner.runRemoteSearch(searchText: searchText) { do {
         try await self.appDelegate.getMeta(self.account.info).librarySyncer
@@ -838,7 +917,8 @@ class SearchVC: BasicTableViewController {
 
   func updateContentUnavailable() {
     if isSearchActive {
-      if artists.isEmpty, albums.isEmpty, playlists.isEmpty, songs.isEmpty {
+      if artists.isEmpty, albums.isEmpty, playlists.isEmpty, songs.isEmpty,
+         !(BlackboxRequestConfig.isConfigured && requestModel.query.count >= 2) {
         contentUnavailableConfiguration = UIContentUnavailableConfiguration.search()
       } else {
         contentUnavailableConfiguration = nil

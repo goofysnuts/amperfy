@@ -1741,7 +1741,8 @@ struct BlackboxQuickSettingsView: View {
   @MainActor
   init() {
     let user = (UIApplication.shared.delegate as! AppDelegate).storage.settings.user
-    _scrobble = State(initialValue: user.isScrobbleStreamedItems)
+    let accounts = (UIApplication.shared.delegate as! AppDelegate).storage.settings.accounts
+    _scrobble = State(initialValue: accounts.active.map { accounts.getSetting($0).read.isScrobbleStreamedItems } ?? false)
     _replayGain = State(initialValue: user.isReplayGainEnabled)
     _autoplay = State(initialValue: user.isAutoplayEnabled)
     _syncQueue = State(initialValue: PlayQueueSync.isEnabled)
@@ -1759,7 +1760,10 @@ struct BlackboxQuickSettingsView: View {
     Form {
       Section {
         Toggle("Scrobbeln", isOn: $scrobble)
-          .onChange(of: scrobble) { _, v in delegate.storage.settings.user.isScrobbleStreamedItems = v }
+          .onChange(of: scrobble) { _, v in
+            guard let active = delegate.storage.settings.accounts.active else { return }
+            delegate.storage.settings.accounts.updateSetting(active) { $0.isScrobbleStreamedItems = v }
+          }
       } footer: {
         Text("Gestreamte Titel an den Server melden (Wiedergabezähler, Rückblicke).")
       }

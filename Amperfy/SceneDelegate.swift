@@ -205,6 +205,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     appDelegate.quickActionsManager.handleSavedShortCutItemIfSaved()
     appDelegate.rebuildMainMenu()
+    // Blackbox Request: Mitteilung, wenn angefragte Alben verfügbar sind
+    BlackboxRequestNotifier.startPolling()
+    Task { await BlackboxRequestNotifier.check() }
   }
 
   func sceneWillResignActive(_ scene: UIScene) {

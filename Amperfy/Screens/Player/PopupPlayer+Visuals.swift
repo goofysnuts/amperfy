@@ -135,7 +135,7 @@ extension PopupPlayerVC {
     }
     guard let artwork = artwork else { return }
     backgroundImage.image = artwork
-    artworkGradientColors = (try? artwork.dominantColors(max: 2)) ?? [
+    artworkGradientColors = (try? artwork.blackboxThumbnail().dominantColors(max: 2)) ?? [
       themePreference.asColor,
       UIColor.systemBackground,
     ]

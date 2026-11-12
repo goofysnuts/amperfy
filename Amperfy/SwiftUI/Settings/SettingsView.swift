@@ -21,6 +21,7 @@
 
 import AmperfyKit
 import SwiftUI
+import UserNotifications
 
 // MARK: - SettingsView
 
@@ -67,6 +68,8 @@ struct SettingsView: View {
         BlackboxSettingsSections()
 
         BlackboxRequestSettingsSection()
+
+        NavidromeScanSection()
 
         SettingsSection(
           content: {
@@ -289,6 +292,7 @@ struct BBRArtist: Codable, Hashable, Identifiable, Sendable {
   let albums: Int?
   let request: BBRStatus?
   let discography: [BBRAlbum]?
+  var inLibrary: Bool? = nil
 }
 
 struct BBRSong: Codable, Hashable, Identifiable, Sendable {
@@ -424,6 +428,52 @@ struct BlackboxRequestClient: Sendable {
   func retry(_ id: Int) async throws { let _: BBRRequest = try await send("/api/requests/\(id)/retry", method: "POST") }
   func delete(_ id: Int) async throws { let _: OK = try await send("/api/requests/\(id)", method: "DELETE") }
 
+  private struct DiscoverResponse: Decodable {
+    struct Section: Decodable {
+      let id: String
+      let title: String
+      let kind: String
+      let items: [Item]
+    }
+    /// Album oder Interpret – je nach Abschnitt
+    struct Item: Decodable {
+      let album: BBRAlbum?
+      let artist: BBRArtist?
+      init(from decoder: Decoder) throws {
+        album = try? BBRAlbum(from: decoder)
+        artist = album == nil ? try? BBRArtist(from: decoder) : nil
+      }
+    }
+    let sections: [Section]
+  }
+
+  func discover(refresh: Bool = false) async throws -> [BBRDiscoverSection] {
+    let r: DiscoverResponse = try await send("/api/discover" + (refresh ? "?refresh=true" : ""))
+    return r.sections.map { s in
+      BBRDiscoverSection(
+        id: s.id, title: s.title, kind: s.kind,
+        albums: s.kind == "albums" ? s.items.compactMap(\.album) : [],
+        artists: s.kind == "artists" ? s.items.compactMap(\.artist) : []
+      )
+    }
+  }
+
+  func genres() async throws -> [BBRGenre] { try await send("/api/genres") }
+  func genre(_ id: String) async throws -> BBRGenreResult { try await send("/api/genre/\(id)") }
+
+  struct Events: Decodable, Sendable {
+    struct Item: Decodable, Sendable {
+      let id: Int
+      let title: String
+      let artist: String
+      let cover: String?
+    }
+    let now: Double
+    let available: [Item]
+  }
+
+  func events(since: Double) async throws -> Events { try await send("/api/events?since=\(since)") }
+
   func health() async throws -> String {
     let h: Health = try await send("/api/health")
     return "Navidrome: \(h.navidrome ?? "–") · NZBGet: \(h.nzbget ?? "–") · Indexer: \(h.indexers ?? 0)"
@@ -513,13 +563,24 @@ final class BBRSearchModel: ObservableObject {
 }
 
 struct BlackboxRequestSearchView: View {
-  @StateObject private var model = BBRSearchModel()
-  @State private var text: String
-  @Environment(\.dismiss) private var dismiss
-
-  init(initialQuery: String = "") {
-    _text = State(initialValue: initialQuery)
+  enum Scope: String, CaseIterable, Identifiable {
+    case all = "Alle", songs = "Songs", artists = "Interpreten", albums = "Alben", genres = "Genres"
+    var id: String { rawValue }
   }
+
+  @StateObject private var model = BBRSearchModel()
+  @StateObject private var discover = BBRDiscoverModel()
+  @State private var text: String
+  @State private var scope: Scope = .all
+  @Environment(\.dismiss) private var dismiss
+  private let showsDiscover: Bool
+
+  init(initialQuery: String = "", showsDiscover: Bool = false) {
+    _text = State(initialValue: initialQuery)
+    self.showsDiscover = showsDiscover
+  }
+
+  private var isSearching: Bool { model.query.count >= 2 }
 
   var body: some View {
     NavigationStack {
@@ -528,71 +589,47 @@ struct BlackboxRequestSearchView: View {
           Text("Trage unter Einstellungen → Musik anfragen die Adresse deines Blackbox-Request-Servers ein.")
             .foregroundStyle(.secondary)
         }
-        if let error = model.error {
+        if let error = model.error, isSearching {
           Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
         }
-        if !model.result.artists.isEmpty {
-          Section("Interpreten") {
-            ForEach(model.result.artists) { a in
-              NavigationLink(value: BBRRoute.artist(a.id)) {
-                HStack(spacing: 12) {
-                  BBRCover(url: a.picture, size: 48, round: true)
-                  VStack(alignment: .leading) {
-                    Text(a.name).font(.body)
-                    if let n = a.albums { Text("\(n) Alben").font(.footnote).foregroundStyle(.secondary) }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if !model.result.albums.isEmpty {
-          Section("Alben") {
-            ForEach(model.result.albums) { a in
-              NavigationLink(value: BBRRoute.album(a.id)) { BBRAlbumRow(album: a) }
-            }
-          }
-        }
-        if !model.result.songs.isEmpty {
-          Section {
-            ForEach(model.result.songs) { s in
-              NavigationLink(value: BBRRoute.album(s.album.id)) {
-                HStack(spacing: 12) {
-                  BBRCover(url: s.album.coverSmall, size: 48)
-                  VStack(alignment: .leading, spacing: 2) {
-                    Text(s.title).lineLimit(1)
-                    Text("\(s.artist) · \(s.album.title)").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                    BBRStateLabel(inLibrary: s.album.inLibrary == true, request: s.album.request).font(.caption)
-                  }
-                }
-              }
-            }
-          } header: {
-            Text("Songs")
-          } footer: {
-            Text("Angefragt wird immer das ganze Album.")
-          }
+        if scope == .genres {
+          genreSection
+        } else if isSearching {
+          resultSections
+        } else if showsDiscover {
+          discoverSections
         }
       }
+      .listStyle(.insetGrouped)
       .overlay {
-        if model.isLoading, model.result.artists.isEmpty, model.result.albums.isEmpty {
+        if isSearching, scope != .genres, model.isLoading, model.result.artists.isEmpty, model.result.albums.isEmpty {
           ProgressView()
-        } else if model.query.count >= 2, !model.isLoading, model.error == nil,
+        } else if isSearching, scope != .genres, !model.isLoading, model.error == nil,
                   model.result.artists.isEmpty, model.result.albums.isEmpty, model.result.songs.isEmpty {
           ContentUnavailableView.search(text: model.query)
+        } else if !isSearching, showsDiscover, scope != .genres, discover.isLoading, discover.sections.isEmpty {
+          ProgressView()
         }
       }
-      .navigationTitle("Musik anfragen")
+      .navigationTitle(showsDiscover ? "Musik hinzufügen" : "Musik anfragen")
       .navigationBarTitleDisplayMode(.large)
       .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
-                  prompt: "Interpret, Album oder Song")
+                  prompt: "Songs, Interpreten, Alben, Genres")
+      .searchScopes($scope, activation: .onSearchPresentation) {
+        ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
+      }
       .onChange(of: text) { _, newValue in model.search(newValue) }
-      .onAppear { if !text.isEmpty, model.query.isEmpty { model.search(text, debounce: false) } }
+      .onAppear {
+        if !text.isEmpty, model.query.isEmpty { model.search(text, debounce: false) }
+        if showsDiscover { discover.load() }
+      }
+      .refreshable { if showsDiscover { discover.load(refresh: true) } }
       .navigationDestination(for: BBRRoute.self) { route in
         switch route {
         case let .album(id): BBRAlbumDetailView(albumId: id, onChange: model.refresh)
         case let .artist(id): BBRArtistDetailView(artistId: id, onChange: model.refresh)
         case .requests: BlackboxRequestsListView()
+        case let .genre(id, name): BBRGenreView(genreId: id, name: name)
         }
       }
       .toolbar {
@@ -607,10 +644,251 @@ struct BlackboxRequestSearchView: View {
       }
     }
   }
+
+  // MARK: Suchergebnisse
+
+  @ViewBuilder
+  private var resultSections: some View {
+    if (scope == .all || scope == .artists), !model.result.artists.isEmpty {
+      Section("Interpreten") {
+        ForEach(model.result.artists) { a in
+          NavigationLink(value: BBRRoute.artist(a.id)) { BBRArtistRow(artist: a) }
+        }
+      }
+    }
+    if (scope == .all || scope == .albums), !model.result.albums.isEmpty {
+      Section("Alben") {
+        ForEach(model.result.albums) { a in
+          NavigationLink(value: BBRRoute.album(a.id)) { BBRAlbumRow(album: a) }
+        }
+      }
+    }
+    if (scope == .all || scope == .songs), !model.result.songs.isEmpty {
+      Section {
+        ForEach(model.result.songs) { s in
+          NavigationLink(value: BBRRoute.album(s.album.id)) {
+            HStack(spacing: 12) {
+              BBRCover(url: s.album.coverSmall, size: 48)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(s.title).lineLimit(1)
+                Text("\(s.artist) · \(s.album.title)").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                BBRStateLabel(inLibrary: s.album.inLibrary == true, request: s.album.request).font(.caption)
+              }
+            }
+          }
+        }
+      } header: {
+        Text("Songs")
+      } footer: {
+        Text("Angefragt wird immer das ganze Album.")
+      }
+    }
+  }
+
+  // MARK: Genres
+
+  @ViewBuilder
+  private var genreSection: some View {
+    let q = text.trimmingCharacters(in: .whitespaces).lowercased()
+    let list = discover.genres.filter { q.isEmpty || $0.name.lowercased().contains(q) }
+    Section("Genres") {
+      if discover.genres.isEmpty {
+        ProgressView().frame(maxWidth: .infinity).onAppear { discover.loadGenres() }
+      }
+      ForEach(list) { g in
+        NavigationLink(value: BBRRoute.genre(g.id, g.name)) {
+          HStack(spacing: 12) {
+            BBRCover(url: g.picture, size: 44)
+            Text(g.name)
+          }
+        }
+      }
+    }
+  }
+
+  // MARK: Vorschläge
+
+  @ViewBuilder
+  private var discoverSections: some View {
+    if let error = discover.error {
+      Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+    }
+    ForEach(discover.sections) { sec in
+      Section {
+        BBRShelf(section: sec)
+          .listRowInsets(EdgeInsets())
+          .listRowBackground(Color.clear)
+      } header: {
+        Text(sec.title).font(.title3.bold()).foregroundStyle(.primary).textCase(nil)
+      }
+    }
+    if !discover.sections.isEmpty {
+      Section {
+        Button {
+          scope = .genres
+          discover.loadGenres()
+        } label: {
+          Label("Nach Genre stöbern", systemImage: "square.grid.2x2")
+        }
+      }
+    }
+  }
+}
+
+struct BBRArtistRow: View {
+  let artist: BBRArtist
+
+  var body: some View {
+    HStack(spacing: 12) {
+      BBRCover(url: artist.picture, size: 48, round: true)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(artist.name)
+        if artist.inLibrary == true {
+          Text("In deiner Mediathek").font(.footnote).foregroundStyle(.green)
+        } else if let r = artist.request {
+          Text(BBRStatusText.text(r.status)).font(.footnote).foregroundStyle(BBRStatusText.color(r.status))
+        } else if let n = artist.albums {
+          Text("\(n) Alben").font(.footnote).foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+}
+
+/// horizontale Reihe mit Alben oder Interpreten (Vorschläge)
+struct BBRShelf: View {
+  let section: BBRDiscoverSection
+
+  var body: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      LazyHStack(alignment: .top, spacing: 14) {
+        if section.kind == "artists" {
+          ForEach(section.artists) { a in
+            NavigationLink(value: BBRRoute.artist(a.id)) {
+              VStack(spacing: 6) {
+                BBRCover(url: a.picture, size: 120, round: true)
+                Text(a.name).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+              }
+              .frame(width: 120)
+            }
+            .buttonStyle(.plain)
+          }
+        } else {
+          ForEach(section.albums) { a in
+            NavigationLink(value: BBRRoute.album(a.id)) {
+              VStack(alignment: .leading, spacing: 3) {
+                BBRCover(url: a.coverSmall ?? a.cover, size: 140)
+                Text(a.title).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+                Text(a.request.map { BBRStatusText.text($0.status) } ?? a.artist)
+                  .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+              }
+              .frame(width: 140)
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 6)
+    }
+  }
+}
+
+struct BBRGenreView: View {
+  let genreId: String
+  let name: String
+  @State private var albums: [BBRAlbum] = []
+  @State private var artists: [BBRArtist] = []
+  @State private var error: String?
+  @State private var loaded = false
+
+  var body: some View {
+    List {
+      if let error {
+        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+      }
+      if !artists.isEmpty {
+        Section {
+          BBRShelf(section: BBRDiscoverSection(id: "a", title: "", kind: "artists", albums: [], artists: artists))
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        } header: {
+          Text("Interpreten").font(.title3.bold()).foregroundStyle(.primary).textCase(nil)
+        }
+      }
+      if !albums.isEmpty {
+        Section("Top-Alben") {
+          ForEach(albums) { a in
+            NavigationLink(value: BBRRoute.album(a.id)) { BBRAlbumRow(album: a) }
+          }
+        }
+      }
+    }
+    .overlay { if !loaded { ProgressView() } }
+    .navigationTitle(name)
+    .task {
+      do {
+        let g = try await BlackboxRequestClient().genre(genreId)
+        albums = g.albums
+        artists = g.artists.filter { $0.inLibrary != true }
+      } catch {
+        self.error = error.localizedDescription
+      }
+      loaded = true
+    }
+  }
+}
+
+struct BBRGenre: Codable, Hashable, Identifiable, Sendable {
+  let id: String
+  let name: String
+  let picture: String?
+}
+
+struct BBRGenreResult: Codable, Sendable {
+  let albums: [BBRAlbum]
+  let artists: [BBRArtist]
+}
+
+struct BBRDiscoverSection: Identifiable, Hashable, Sendable {
+  let id: String
+  let title: String
+  let kind: String
+  let albums: [BBRAlbum]
+  let artists: [BBRArtist]
+}
+
+@MainActor
+final class BBRDiscoverModel: ObservableObject {
+  @Published var sections: [BBRDiscoverSection] = []
+  @Published var genres: [BBRGenre] = []
+  @Published var isLoading = false
+  @Published var error: String?
+
+  func load(refresh: Bool = false) {
+    guard BlackboxRequestConfig.isConfigured, !isLoading, refresh || sections.isEmpty else { return }
+    isLoading = true
+    Task {
+      do {
+        sections = try await BlackboxRequestClient().discover(refresh: refresh)
+        error = nil
+      } catch {
+        self.error = error.localizedDescription
+      }
+      isLoading = false
+    }
+  }
+
+  func loadGenres() {
+    guard BlackboxRequestConfig.isConfigured, genres.isEmpty else { return }
+    Task {
+      genres = (try? await BlackboxRequestClient().genres()) ?? []
+    }
+  }
 }
 
 enum BBRRoute: Hashable {
-  case album(String), artist(String), requests
+  case album(String), artist(String), requests, genre(String, String)
 }
 
 struct BBRAlbumRow: View {
@@ -887,7 +1165,10 @@ struct BlackboxRequestSettingsSection: View {
           .keyboardType(.URL)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
-          .onChange(of: url) { _, v in BlackboxRequestConfig.url = v }
+          .onChange(of: url) { _, v in
+            BlackboxRequestConfig.url = v
+            if !v.isEmpty { BlackboxRequestNotifier.requestPermission() }
+          }
       }
       SettingsRow(title: "API-Key") {
         SecureField("optional", text: $apiKey)
@@ -1004,6 +1285,154 @@ struct BBRAlbumSheet: View {
         .toolbar {
           ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } }
         }
+    }
+  }
+}
+
+
+// MARK: - Mitteilung, wenn ein angefragtes Album verfügbar ist
+
+@MainActor
+enum BlackboxRequestNotifier {
+  private static let lastKey = "blackbox.request.lastEvent"
+  private static var pollTask: Task<Void, Never>?
+  private static var checking = false
+
+  /// prüft jede Minute, solange die App läuft (auch im Hintergrund während Musik spielt)
+  static func startPolling() {
+    guard pollTask == nil else { return }
+    pollTask = Task { @MainActor in
+      while !Task.isCancelled {
+        await check()
+        try? await Task.sleep(nanoseconds: 60_000_000_000)
+      }
+    }
+  }
+
+  static func requestPermission() {
+    Task {
+      _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+    }
+  }
+
+  static func check() async {
+    guard BlackboxRequestConfig.isConfigured, !checking else { return }
+    checking = true
+    defer { checking = false }
+    let since = UserDefaults.standard.double(forKey: lastKey)
+    guard let ev = try? await BlackboxRequestClient().events(since: since == 0 ? Date().timeIntervalSince1970 - 3600 : since)
+    else { return }
+    UserDefaults.standard.set(ev.now, forKey: lastKey)
+    for item in ev.available {
+      await post(item)
+    }
+  }
+
+  private static func post(_ item: BlackboxRequestClient.Events.Item) async {
+    let content = UNMutableNotificationContent()
+    content.title = "Neu in deiner Mediathek"
+    content.body = "„\(item.title)“ von \(item.artist) ist jetzt verfügbar."
+    content.sound = .default
+    content.threadIdentifier = "blackbox-request"
+    if let cover = item.cover, let url = URL(string: cover),
+       let data = try? await URLSession.shared.data(from: url).0 {
+      let file = FileManager.default.temporaryDirectory.appendingPathComponent("bbr-\(item.id).jpg")
+      if (try? data.write(to: file)) != nil,
+         let att = try? UNNotificationAttachment(identifier: "cover", url: file) {
+        content.attachments = [att]
+      }
+    }
+    let req = UNNotificationRequest(identifier: "bbr-available-\(item.id)", content: content, trigger: nil)
+    try? await UNUserNotificationCenter.current().add(req)
+  }
+}
+
+// MARK: - Navidrome-Bibliothek scannen
+
+@MainActor
+enum NavidromeScanner {
+  struct Status: Sendable {
+    let scanning: Bool
+    let count: Int?
+  }
+
+  enum ScanError: LocalizedError {
+    case noAccount, failed(String)
+    var errorDescription: String? {
+      switch self {
+      case .noAccount: return "Kein Konto aktiv."
+      case let .failed(m): return m
+      }
+    }
+  }
+
+  private static func call(_ action: String, _ query: [URLQueryItem] = []) async throws -> Status {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    guard let info = delegate.storage.settings.accounts.active else { throw ScanError.noAccount }
+    let api = delegate.getMeta(info).backendApi
+    let url = try await api.generateUrl(forAction: action, query: [URLQueryItem(name: "f", value: "json")] + query)
+    var req = URLRequest(url: url, timeoutInterval: 30)
+    for (k, v) in api.httpHeaders { req.setValue(v, forHTTPHeaderField: k) }
+    let (data, _) = try await URLSession.shared.data(for: req)
+    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let resp = json["subsonic-response"] as? [String: Any] else { throw ScanError.failed("Ungültige Antwort") }
+    if resp["status"] as? String != "ok" {
+      let msg = (resp["error"] as? [String: Any])?["message"] as? String ?? "Fehler"
+      throw ScanError.failed(msg.contains("admin") || msg.contains("authorized") ? "Scannen ist nur mit einem Admin-Konto möglich." : msg)
+    }
+    let st = resp["scanStatus"] as? [String: Any] ?? [:]
+    return Status(scanning: st["scanning"] as? Bool ?? false, count: st["count"] as? Int)
+  }
+
+  static func start(full: Bool) async throws -> Status {
+    try await call("startScan", full ? [URLQueryItem(name: "fullScan", value: "true")] : [])
+  }
+
+  static func status() async throws -> Status { try await call("getScanStatus") }
+}
+
+struct NavidromeScanSection: View {
+  @State private var running = false
+  @State private var message: String?
+
+  var body: some View {
+    SettingsSection(content: {
+      Button {
+        scan(full: false)
+      } label: {
+        HStack {
+          Text("Mediathek scannen")
+          Spacer()
+          if running { ProgressView() }
+        }
+      }
+      .disabled(running)
+      Button("Vollständigen Scan starten") { scan(full: true) }
+        .disabled(running)
+      if let message {
+        Text(message).font(.footnote).foregroundStyle(.secondary)
+      }
+    }, footer: "Navidrome sucht nach neuen und geänderten Dateien. Der vollständige Scan liest alle Tags neu ein (dauert länger).",
+    header: "Navidrome")
+  }
+
+  private func scan(full: Bool) {
+    running = true
+    message = "Scan gestartet …"
+    Task {
+      do {
+        var st = try await NavidromeScanner.start(full: full)
+        while st.scanning {
+          message = "Scanne … \(st.count.map { "\($0) Titel" } ?? "")"
+          try await Task.sleep(nanoseconds: 2_000_000_000)
+          st = try await NavidromeScanner.status()
+        }
+        message = "Fertig – \(st.count.map { "\($0) Titel in der Mediathek" } ?? "Mediathek aktuell")."
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+      } catch {
+        message = error.localizedDescription
+      }
+      running = false
     }
   }
 }

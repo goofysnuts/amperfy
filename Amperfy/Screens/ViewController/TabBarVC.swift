@@ -1514,7 +1514,7 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
 
   private func applyColors(from image: UIImage?) {
     var colors: [UIColor] = [UIColor(white: 0.25, alpha: 1), .black]
-    if let image, let dominant = try? image.dominantColors(max: 2), let first = dominant.first {
+    if let image, let dominant = try? image.blackboxThumbnail().dominantColors(max: 2), let first = dominant.first {
       let darker = Self.darken(first, by: 0.55)
       let darkest = Self.darken(dominant.count > 1 ? dominant[1] : first, by: 0.25)
       colors = [darker, darkest]
@@ -1944,6 +1944,21 @@ final class PlayQueueSync: MusicPlayable {
 
 // MARK: - Cover colored background for album / playlist details (Blackbox)
 
+extension UIImage {
+  /// kleine Kopie (max. 64 px) für Farbberechnungen
+  func blackboxThumbnail(maxSide: CGFloat = 64) -> UIImage {
+    let w = size.width * scale, h = size.height * scale
+    guard max(w, h) > maxSide, w > 0, h > 0 else { return self }
+    let f = maxSide / max(w, h)
+    let target = CGSize(width: max(1, (w * f).rounded()), height: max(1, (h * f).rounded()))
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+      self.draw(in: CGRect(origin: .zero, size: target))
+    }
+  }
+}
+
 final class CoverGradientBackgroundView: UIView {
   private let gradient = CAGradientLayer()
 
@@ -1998,8 +2013,16 @@ extension UITableViewController {
     UITableViewCell.appearance(whenContainedInInstancesOf: [PlaylistDetailVC.self]).backgroundColor = .clear
     let delegate = UIApplication.shared.delegate as! AppDelegate
     func setColor(from image: UIImage?) {
-      guard let image, let colors = try? image.dominantColors(max: 1), let c = colors.first else { return }
-      UIView.transition(with: bg, duration: 0.3, options: .transitionCrossDissolve) { bg.apply(color: c) }
+      guard let image else { return }
+      // Farbe aus einer kleinen Kopie im Hintergrund berechnen – große Cover (z. B. 1000 px von
+      // Blackbox Request) blockierten sonst den Main-Thread minutenlang
+      Task.detached(priority: .userInitiated) {
+        let small = image.blackboxThumbnail()
+        guard let c = (try? small.dominantColors(max: 1))?.first else { return }
+        await MainActor.run {
+          UIView.transition(with: bg, duration: 0.3, options: .transitionCrossDissolve) { bg.apply(color: c) }
+        }
+      }
     }
     if let playlist = container as? Playlist,
        let coverArtId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id),

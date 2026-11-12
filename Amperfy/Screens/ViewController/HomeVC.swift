@@ -22,6 +22,7 @@
 import AmperfyKit
 import CoreData
 import OSLog
+import SwiftUI
 import UIKit
 
 // MARK: - HomeVC
@@ -95,6 +96,12 @@ final class HomeVC: UICollectionViewController {
     // ensures that the collection view stops placing items under the sidebar
     collectionView.contentInsetAdjustmentBehavior = .scrollableAxes
     title = BlackboxAppearance.homeTitle
+    // Blackbox: „+“ = Musik entdecken, suchen und anfragen (Blackbox Request)
+    let add = UIBarButtonItem(
+      image: UIImage(systemName: "plus"), style: .plain, target: self, action: #selector(addMusicTapped)
+    )
+    add.accessibilityLabel = "Musik hinzufügen"
+    navigationItem.rightBarButtonItem = add
 
     accountNotificationHandler = AccountNotificationHandler(
       storage: appDelegate.storage,
@@ -477,6 +484,12 @@ final class HomeVC: UICollectionViewController {
   }
 
   static let sectionsEditedNotification = Notification.Name("de.jannes.blackbox.homeSectionsEdited")
+
+  @objc
+  private func addMusicTapped() {
+    let vc = UIHostingController(rootView: BlackboxRequestSearchView(showsDiscover: true))
+    present(vc, animated: true)
+  }
 
   @objc
   private func remoteTapped() {

@@ -200,6 +200,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
       }
     }
+    await BlackboxRequestNotifier.check()
     bgTask.setTaskCompleted(success: success)
     userStatistics.backgroundFetchPerformed(result: UIBackgroundFetchResult.newData)
     scheduleAppRefresh()

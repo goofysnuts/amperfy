@@ -2217,8 +2217,10 @@ enum BBNibTranslator {
 }
 
 extension UIViewController {
+  /// `dynamic`: Aufruf muss über die Objective-C-Laufzeit gehen, sonst ruft sich die Methode
+  /// nach dem Vertauschen im Release-Build direkt selbst auf (Endlosschleife -> Absturz beim Start)
   @objc
-  fileprivate func bb_viewWillAppear(_ animated: Bool) {
+  dynamic func bb_viewWillAppear(_ animated: Bool) {
     bb_viewWillAppear(animated)
     BBNibTranslator.translate(self)
   }
@@ -2226,7 +2228,7 @@ extension UIViewController {
 
 extension UIView {
   @objc
-  fileprivate func bb_viewAwakeFromNib() {
+  dynamic func bb_viewAwakeFromNib() {
     bb_viewAwakeFromNib()
     BBNibTranslator.translate(self)
   }

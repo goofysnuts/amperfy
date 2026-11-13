@@ -1025,8 +1025,18 @@ struct BlackboxNowPlaying {
       if let artwork = playable.artwork {
         delegate.getMeta(info).artworkDownloadManager.download(object: artwork)
       }
+      // noch nicht lokal geladen -> erst Platzhalter, dann das Cover direkt vom Server
+      let artworkCached = playable.artwork?.isCached ?? false
       if coverArtId == nil {
         completion(image)
+        let remoteId = playable.artwork?.id ?? playable.asSong?.album?.artwork?.id
+        if !artworkCached, let remoteId, !remoteId.isEmpty {
+          Task { @MainActor in
+            if let remote = await PlaylistCoverLoader.shared.image(coverArtId: remoteId, accountInfo: info) {
+              completion(remote)
+            }
+          }
+        }
         return
       }
     }
@@ -1235,7 +1245,8 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     while let presented = top.presentedViewController { top = presented }
     if top is BlackboxPlayerVC { return }
     let vc = BlackboxPlayerVC()
-    vc.modalPresentationStyle = .fullScreen
+    // overFullScreen: die Ansicht darunter bleibt erhalten -> nach dem Schließen ist man wieder dort, wo man war
+    vc.modalPresentationStyle = .overFullScreen
     top.present(vc, animated: true)
   }
 
@@ -2106,8 +2117,9 @@ final class RemoteQueueVC: UITableViewController {
   @objc
   private func reload() {
     let s = RemoteSession.shared.status
-    let new = s?.queue ?? []
     let newCurrent = s?.queueIndex
+    // nur der aktuelle und die kommenden Titel
+    let new = (s?.queue ?? []).filter { newCurrent == nil || $0.index >= newCurrent! }
     guard new != entries || newCurrent != current else { return }
     let first = entries.isEmpty
     entries = new

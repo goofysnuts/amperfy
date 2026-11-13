@@ -68,7 +68,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .podcasts: return "Podcasts"
     case .radios: return "Radios"
     case .randomArtists: return "Random Artists"
-    case .randomGenres: return "Random Genres"
+    case .randomGenres: return "Genres"
     case .randomSongs: return "Random Songs"
     case .frequentAlbums: return "Frequently Played Albums"
     case .quickAccess: return "Schnellzugriff"

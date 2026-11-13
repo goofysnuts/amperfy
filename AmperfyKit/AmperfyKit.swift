@@ -233,3 +233,103 @@ public class AmperKit {
     LocalNotificationManager(userStatistics: userStatistics, storage: storage)
   }()
 }
+
+// MARK: - Blackbox: Sprache (Deutsch/Englisch, in den Einstellungen umschaltbar)
+
+public enum BlackboxLanguage: String, CaseIterable, Sendable {
+  case system, de, en
+
+  public var label: String {
+    switch self {
+    case .system: return BBL("Systemsprache", en: "System language")
+    case .de: return "Deutsch"
+    case .en: return "English"
+    }
+  }
+}
+
+public enum BBLocale {
+  private static let key = "blackbox.language"
+
+  public static var setting: BlackboxLanguage {
+    get { BlackboxLanguage(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system }
+    set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
+  }
+
+  /// beim Start festgelegt – ein Wechsel wird nach dem Neustart der App aktiv
+  public static let isGerman: Bool = {
+    switch setting {
+    case .de: return true
+    case .en: return false
+    case .system: return Locale.preferredLanguages.first?.lowercased().hasPrefix("de") ?? false
+    }
+  }()
+}
+
+/// Text in beiden Sprachen direkt im Code
+public func BBL(_ de: String, en: String) -> String { BBLocale.isGerman ? de : en }
+
+/// Übersetzbarer Text mit Platzhaltern: T("\(n) Alben") -> Schlüssel "%@ Alben"
+public struct BBText: ExpressibleByStringLiteral, ExpressibleByStringInterpolation, Sendable {
+  public let key: String
+  public let args: [String]
+
+  public init(stringLiteral value: String) {
+    key = value
+    args = []
+  }
+
+  public init(stringInterpolation: Interpolation) {
+    key = stringInterpolation.key
+    args = stringInterpolation.args
+  }
+
+  public struct Interpolation: StringInterpolationProtocol, Sendable {
+    var key = ""
+    var args: [String] = []
+    public init(literalCapacity: Int, interpolationCount: Int) {}
+    public mutating func appendLiteral(_ literal: String) { key += literal }
+    public mutating func appendInterpolation<V>(_ value: V) {
+      key += "%@"
+      args.append("\(value)")
+    }
+  }
+}
+
+/// Übersetzt deutsche bzw. englische Texte in die eingestellte Sprache
+public func T(_ text: BBText) -> String {
+  let table = BBLocale.isGerman ? BBTranslations.toGerman : BBTranslations.toEnglish
+  var result = table[text.key] ?? text.key
+  for arg in text.args {
+    guard let range = result.range(of: "%@") else { break }
+    result.replaceSubrange(range, with: arg)
+  }
+  return result
+}
+
+/// wie T(), für Texte in Variablen
+public func TV(_ text: String) -> String {
+  let table = BBLocale.isGerman ? BBTranslations.toGerman : BBTranslations.toEnglish
+  return table[text] ?? text
+}
+
+public enum BBTranslations {
+  /// (Deutsch, Englisch)
+  static let pairs: [(String, String)] = BBTranslationTable.pairs
+  public static let toGerman: [String: String] = {
+    var d = [String: String]()
+    for (de, en) in pairs where d[en] == nil { d[en] = de }
+    return d
+  }()
+
+  public static let toEnglish: [String: String] = {
+    var d = [String: String]()
+    for (de, en) in pairs where d[de] == nil { d[de] = en }
+    return d
+  }()
+}
+
+enum BBTranslationTable {
+  static let pairs: [(String, String)] = [
+  ]
+}

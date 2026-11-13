@@ -110,6 +110,7 @@ class HomeManager: NSObject {
     super.init()
     migrateFireSonicSections()
     migrateBlackboxSections()
+    migrateGenresSection()
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(playlistCategoriesChanged),
@@ -140,6 +141,25 @@ class HomeManager: NSObject {
     order.insert(.recaps, at: 0)
     let orderIdx = (order.firstIndex(of: .quickAccess).map { $0 + 1 }) ?? min(1, order.count)
     order.insert(.songOfTheDay, at: orderIdx)
+    storage.settings.accounts.updateSetting(account.info) { accountSettings in
+      accountSettings.homeSections = visible
+      accountSettings.homeSectionOrder = order
+    }
+    orderedVisibleSections = visible
+  }
+
+  /// Blackbox: Genres (mit Covern) auf Home einmalig einblenden
+  private func migrateGenresSection() {
+    let flagKey = "blackbox.homeSectionsMigrated.genres.\(account.info.ident)"
+    guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+    UserDefaults.standard.set(true, forKey: flagKey)
+    let settings = storage.settings.accounts.getSetting(account.info).read
+    guard !settings.homeSections.contains(.randomGenres) else { return }
+    var visible = settings.homeSections
+    let idx = (visible.firstIndex(of: .randomAlbums).map { $0 + 1 }) ?? visible.count
+    visible.insert(.randomGenres, at: idx)
+    var order = settings.homeSectionOrder.filter { $0 != .randomGenres }
+    order.insert(.randomGenres, at: (order.firstIndex(of: .randomAlbums).map { $0 + 1 }) ?? order.count)
     storage.settings.accounts.updateSetting(account.info) { accountSettings in
       accountSettings.homeSections = visible
       accountSettings.homeSectionOrder = order

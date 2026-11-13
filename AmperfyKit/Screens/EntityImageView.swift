@@ -127,6 +127,10 @@ open class EntityImageView: UIView {
   }
 
   private func displayServerCoverIfAvailable(container: PlayableContainable) {
+    if let genre = container as? Genre, let accountInfo = genre.account?.info {
+      displayGenreCover(genre: genre, accountInfo: accountInfo)
+      return
+    }
     guard let playlist = container as? Playlist,
           let accountInfo = playlist.account?.info,
           let coverArtId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
@@ -146,6 +150,27 @@ open class EntityImageView: UIView {
       guard let image = await loader.image(coverArtId: coverArtId, accountInfo: accountInfo)
       else { return }
       guard let self, self.coverRequestKey == coverArtId else { return }
+      self.showCoverOverlay(image)
+    }
+  }
+
+  /// Blackbox: Genre-Kachel mit dem Cover eines Albums dieses Genres
+  private func displayGenreCover(genre: Genre, accountInfo: AccountInfo) {
+    let name = genre.name
+    let key = "genre:" + name
+    coverRequestKey = key
+    if let id = GenreCoverResolver.shared.cachedCoverArtId(genre: name),
+       let cached = PlaylistCoverLoader.shared.cachedImage(coverArtId: id) {
+      showCoverOverlay(cached)
+      return
+    }
+    hideCoverOverlay()
+    coverRequestKey = key
+    Task { @MainActor [weak self] in
+      guard let id = await GenreCoverResolver.shared.coverArtId(genre: name, accountInfo: accountInfo),
+            let image = await PlaylistCoverLoader.shared.image(coverArtId: id, accountInfo: accountInfo)
+      else { return }
+      guard let self, self.coverRequestKey == key else { return }
       self.showCoverOverlay(image)
     }
   }
@@ -278,5 +303,55 @@ public final class PlaylistCoverLoader {
       failed[coverArtId] = Date()
     }
     return image
+  }
+}
+
+
+// MARK: - GenreCoverResolver
+
+/// Blackbox: Cover für Genres – das Cover eines (meistgespielten) Albums des Genres.
+@MainActor
+public final class GenreCoverResolver {
+  public static let shared = GenreCoverResolver()
+  private static let storeKey = "blackbox.genreCovers"
+  private var ids: [String: String]
+  private var running = [String: Task<String?, Never>]()
+
+  private init() {
+    ids = UserDefaults.standard.dictionary(forKey: Self.storeKey) as? [String: String] ?? [:]
+  }
+
+  public func cachedCoverArtId(genre: String) -> String? { ids[genre] }
+
+  public func coverArtId(genre: String, accountInfo: AccountInfo) async -> String? {
+    if let id = ids[genre] { return id }
+    if let task = running[genre] { return await task.value }
+    let api = AmperKit.shared.getMeta(accountInfo).backendApi
+    let task = Task<String?, Never> {
+      let query = [
+        URLQueryItem(name: "type", value: "byGenre"), URLQueryItem(name: "genre", value: genre),
+        URLQueryItem(name: "size", value: "20"), URLQueryItem(name: "f", value: "json"),
+      ]
+      guard let url = try? await api.generateUrl(forAction: "getAlbumList2", query: query) else { return nil }
+      var request = URLRequest(url: url, timeoutInterval: 20)
+      for (k, v) in api.httpHeaders { request.setValue(v, forHTTPHeaderField: k) }
+      guard let data = try? await URLSession.shared.data(for: request).0,
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let resp = json["subsonic-response"] as? [String: Any],
+            let albums = (resp["albumList2"] as? [String: Any])?["album"] as? [[String: Any]]
+      else { return nil }
+      // bevorzugt das meistgespielte Album mit Cover
+      let withCover = albums.filter { ($0["coverArt"] as? String)?.isEmpty == false }
+      let best = withCover.max { ($0["playCount"] as? Int ?? 0) < ($1["playCount"] as? Int ?? 0) }
+      return best?["coverArt"] as? String
+    }
+    running[genre] = task
+    let id = await task.value
+    running[genre] = nil
+    if let id {
+      ids[genre] = id
+      UserDefaults.standard.set(ids, forKey: Self.storeKey)
+    }
+    return id
   }
 }

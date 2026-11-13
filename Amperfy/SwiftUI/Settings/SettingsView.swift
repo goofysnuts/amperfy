@@ -288,6 +288,8 @@ struct BBRAlbum: Codable, Hashable, Identifiable, Sendable {
   /// Anzahl Titel dieses Albums in der Mediathek; partial = nur ein Teil davon
   var libraryTracks: Int? = nil
   var partial: Bool? = nil
+  /// Album-ID in Navidrome, wenn (teilweise) vorhanden
+  var libraryId: String? = nil
 
   var partialInfo: (have: Int, total: Int)? {
     guard partial == true, let have = libraryTracks, let total = tracks else { return nil }
@@ -936,6 +938,7 @@ struct BBRAlbumDetailView: View {
   @State private var error: String?
   @State private var sending = false
   @State private var confirmReplace = false
+  @State private var redirected = false
 
   var body: some View {
     List {
@@ -1011,6 +1014,10 @@ struct BBRAlbumDetailView: View {
       VStack(spacing: 8) {
         Label("\(a.libraryTracks ?? 0) von \(a.tracks ?? 0) Titeln in deiner Mediathek", systemImage: "circle.lefthalf.filled")
           .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
+        if let lib = a.libraryId {
+          Button("Vorhandene Titel in der Mediathek öffnen") { BlackboxLibraryNav.openAlbum(id: lib) }
+            .font(.subheadline)
+        }
         Button {
           confirmReplace = true
         } label: {
@@ -1024,8 +1031,15 @@ struct BBRAlbumDetailView: View {
       }
       .padding(.top, 4)
     } else if a.inLibrary == true {
-      Label("In deiner Mediathek", systemImage: "checkmark.circle.fill")
-        .font(.headline).foregroundStyle(.green).padding(.top, 4)
+      VStack(spacing: 8) {
+        Label("In deiner Mediathek", systemImage: "checkmark.circle.fill")
+          .font(.headline).foregroundStyle(.green)
+        if let lib = a.libraryId {
+          Button("In der Mediathek öffnen") { BlackboxLibraryNav.openAlbum(id: lib) }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        }
+      }
+      .padding(.top, 4)
     } else if let r = a.request {
       VStack(spacing: 6) {
         BBRStateLabel(inLibrary: false, request: r).font(.headline)
@@ -1049,6 +1063,11 @@ struct BBRAlbumDetailView: View {
 
   private func load() async {
     do { album = try await BlackboxRequestClient().album(albumId); error = nil } catch { self.error = error.localizedDescription }
+    // komplett in der Mediathek -> direkt zum Album der Mediathek
+    if let a = album, a.inLibrary == true, !a.isBusy, let lib = a.libraryId, !redirected {
+      redirected = true
+      BlackboxLibraryNav.openAlbum(id: lib)
+    }
   }
 
   private func send(_ a: BBRAlbum, replace: Bool = false) async {
@@ -1946,5 +1965,74 @@ final class BlackboxArtistVC: UIHostingController<BlackboxArtistView> {
 
   private func openList() {
     navigationController?.pushViewController(ArtistDetailVC(account: account, artist: artist), animated: true)
+  }
+}
+
+// MARK: - Radio (wie bei Spotify): zu einem Song eine temporäre Liste mit passenden Titeln
+
+@MainActor
+enum BlackboxRadio {
+  static func start(seed song: Song) async {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    guard let account = song.account else { return }
+    let meta = delegate.getMeta(account.info)
+    var similar: [Song] = []
+    // 1. ähnliche Titel über Navidrome (Last.fm/ListenBrainz-Agenten)
+    if let found = try? await meta.librarySyncer.requestSimilarSongs(song: song, count: 80) {
+      similar = found.filter { $0.id != song.id }
+    }
+    // 2. zu wenig? -> Titel des Interpreten dazu
+    if similar.count < 15, let artist = song.artist {
+      try? await artist.fetch(
+        storage: delegate.storage, librarySyncer: meta.librarySyncer,
+        playableDownloadManager: meta.playableDownloadManager
+      )
+      let own = artist.playables.filterSongs().filter { $0.id != song.id && !similar.contains($0) }.shuffled()
+      similar += own.prefix(max(0, 40 - similar.count))
+    }
+    if similar.isEmpty {
+      delegate.eventLogger.info(topic: "Radio", message: BBL("Keine passenden Titel gefunden.", en: "No matching songs found."), displayPopup: true)
+      return
+    }
+    let songs = [song] + similar.shuffled()
+    delegate.player.play(context: PlayContext(name: "Radio: \(song.title)", playables: songs))
+    UINotificationFeedbackGenerator().notificationOccurred(.success)
+  }
+}
+
+
+// MARK: - Aus „Musik hinzufügen“ in die Mediathek springen
+
+@MainActor
+enum BlackboxLibraryNav {
+  static func openAlbum(id: String) {
+    let delegate = UIApplication.shared.delegate as! AppDelegate
+    guard let info = delegate.storage.settings.accounts.active else { return }
+    let library = delegate.storage.main.library
+    let account = library.getAccount(info: info)
+    func show(_ album: Album) {
+      let vc = AppStoryboard.Main.segueToAlbumDetail(account: account, album: album)
+      // alle Sheets schließen, dann im Mediathek-Tab anzeigen
+      let root = UIApplication.shared.connectedScenes
+        .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController
+      if let root, root.presentedViewController != nil {
+        root.dismiss(animated: true) { delegate.displayInLibraryTab(vc: vc) }
+      } else {
+        delegate.displayInLibraryTab(vc: vc)
+      }
+    }
+    if let album = library.getAlbum(for: account, id: id, isDetailFaultResolution: true) {
+      show(album)
+      return
+    }
+    // noch nicht lokal bekannt (gerade erst geladen): Bibliothek kurz abgleichen
+    Task { @MainActor in
+      try? await delegate.getMeta(info).librarySyncer.syncNewestAlbums(offset: 0, count: 50)
+      if let album = library.getAlbum(for: account, id: id, isDetailFaultResolution: true) {
+        show(album)
+      } else {
+        delegate.eventLogger.info(topic: "Mediathek", message: BBL("Album ist noch nicht in der App – bitte Mediathek aktualisieren.", en: "Album is not in the app yet – please refresh the library."), displayPopup: true)
+      }
+    }
   }
 }

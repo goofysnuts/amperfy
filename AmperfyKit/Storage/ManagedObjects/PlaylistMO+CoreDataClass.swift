@@ -59,6 +59,12 @@ public final class PlaylistMO: NSManagedObject {
       NSPredicate(format: "%K == nil", #keyPath(PlaylistMO.playersShuffledContextPlaylist)),
       NSPredicate(format: "%K == nil", #keyPath(PlaylistMO.playersUserQueuePlaylist)),
       NSPredicate(format: "%K == nil", #keyPath(PlaylistMO.playersPodcastPlaylist)),
+      // Blackbox: Arbeits-Playlists der Navidrome-Plugins (Berichte/Vorschläge) ausblenden
+      NSPredicate(
+        format: "%K == nil OR NOT (%K IN %@)", #keyPath(PlaylistMO.name), #keyPath(PlaylistMO.name),
+        ["Mediathek aufräumen – Bericht", "Alben aufräumen – Bericht", "Alben zusammenführen – Vorschlag",
+         "Duplikate – zum Löschen", "Duplikate – Übersicht"]
+      ),
     ])
   }
 

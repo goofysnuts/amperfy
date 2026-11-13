@@ -270,7 +270,15 @@ public struct UserSettings: Sendable, Codable {
 
   private var _swipeActionSettings: SwipeActionSettings = .defaultSettings
   public var swipeActionSettings: SwipeActionSettings {
-    get { _swipeActionSettings }
+    // Blackbox: nach rechts wischen = Kontext-Warteschlange, nach links = Download + Zur Playlist;
+    // User-Queue-Aktionen entfallen
+    get {
+      var leading = _swipeActionSettings.leading.filter {
+        ![.insertUserQueue, .appendUserQueue, .download, .addToPlaylist].contains($0)
+      }
+      if leading.isEmpty { leading = [.insertContextQueue, .appendContextQueue] }
+      return SwipeActionSettings(leading: leading, trailing: [.download, .addToPlaylist])
+    }
     set { _swipeActionSettings = newValue }
   }
 

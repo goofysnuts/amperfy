@@ -245,7 +245,7 @@ extension QueueVC: UITableViewDelegate, UITableViewDataSource {
     let sectionCategors = PlayerSectionCategory(rawValue: section)
     switch sectionCategors {
     case .contextPrev:
-      return contextPrevQueueSectionHeader
+      return nil // Blackbox: bereits gespielte Titel nicht anzeigen
     case .userQueue:
       refreshUserQueueSectionHeader()
       return userQueueSectionHeader
@@ -259,7 +259,7 @@ extension QueueVC: UITableViewDelegate, UITableViewDataSource {
   func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
     switch PlayerSectionCategory(rawValue: section) {
     case .contextPrev:
-      return ContextQueuePrevSectionHeader.frameHeight
+      return CGFloat.leastNormalMagnitude
     case .userQueue:
       if player.userQueueCount == 0 {
         return CGFloat.leastNormalMagnitude
@@ -288,7 +288,7 @@ extension QueueVC: UITableViewDelegate, UITableViewDataSource {
 
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch PlayerSectionCategory(rawValue: section) {
-    case .contextPrev: return player.prevQueueCount
+    case .contextPrev: return 0 // Blackbox: nur kommende Titel
     case .userQueue: return player.userQueueCount
     case .contextNext: return player.nextQueueCount
     default: return 0

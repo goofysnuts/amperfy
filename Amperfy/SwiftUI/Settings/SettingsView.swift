@@ -1819,6 +1819,8 @@ struct BlackboxArtistView: View {
   var openAlbum: (String) -> Void
   var openArtist: (String) -> Void
   var openAllSongs: () -> Void
+  /// Album aus Blackbox Request (noch nicht in der Mediathek): Titelübersicht mit Anfragen
+  var openMissingAlbum: (BBRAlbum) -> Void = { _ in }
   @State private var bioExpanded = false
 
   private var topAlbums: [BlackboxArtistModel.AlbumInfo] {
@@ -1953,8 +1955,11 @@ struct BlackboxArtistView: View {
           ForEach(model.missing) { a in
             VStack(alignment: .leading, spacing: 4) {
               ZStack(alignment: .bottomTrailing) {
-                BBRCover(url: a.coverSmall ?? a.cover, size: 150)
-                  .opacity(a.request == nil ? 0.75 : 1)
+                Button { openMissingAlbum(a) } label: {
+                  BBRCover(url: a.coverSmall ?? a.cover, size: 150)
+                    .opacity(a.request == nil ? 0.75 : 1)
+                }
+                .buttonStyle(.plain)
                 requestBadge(a).padding(6)
               }
               Text(a.title).font(.subheadline).lineLimit(1)
@@ -2083,9 +2088,19 @@ final class BlackboxArtistVC: UIHostingController<BlackboxArtistView> {
       model: model,
       openAlbum: { id in weakSelf?.openAlbum(id) },
       openArtist: { id in weakSelf?.openArtist(id) },
-      openAllSongs: { weakSelf?.openList() }
+      openAllSongs: { weakSelf?.openList() },
+      openMissingAlbum: { album in weakSelf?.openMissing(album) }
     ))
     weakSelf = self
+  }
+
+  private func openMissing(_ album: BBRAlbum) {
+    let model = (rootView as BlackboxArtistView).model
+    let detail = UIHostingController(rootView: BBRAlbumDetailView(albumId: album.id, onChange: {
+      Task { await model.loadMissing() }
+    }))
+    detail.title = album.title
+    navigationController?.pushViewController(detail, animated: true)
   }
 
   @available(*, unavailable)

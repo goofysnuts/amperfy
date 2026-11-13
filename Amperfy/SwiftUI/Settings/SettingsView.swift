@@ -606,11 +606,13 @@ final class BBRSearchModel: ObservableObject {
 
 struct BlackboxRequestSearchView: View {
   enum Scope: String, CaseIterable, Identifiable {
-    case all = "Alle", songs = "Songs", artists = "Interpreten", albums = "Alben", genres = "Genres"
+    case all = "Alle", songs = "Songs", artists = "Interpreten", albums = "Alben", genres = "Genres",
+         audiobooks = "Hörbücher"
     var id: String { rawValue }
   }
 
   @StateObject private var model = BBRSearchModel()
+  @StateObject private var bookModel = BBRBookSearchModel()
   @StateObject private var discover = BBRDiscoverModel()
   @State private var text: String
   @State private var scope: Scope = .all
@@ -634,7 +636,9 @@ struct BlackboxRequestSearchView: View {
         if let error = model.error, isSearching {
           Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
         }
-        if scope == .genres {
+        if scope == .audiobooks {
+          BBRBookResults(model: bookModel)
+        } else if scope == .genres {
           genreSection
         } else if isSearching {
           resultSections
@@ -644,7 +648,13 @@ struct BlackboxRequestSearchView: View {
       }
       .listStyle(.insetGrouped)
       .overlay {
-        if isSearching, scope != .genres, model.isLoading, model.result.artists.isEmpty, model.result.albums.isEmpty {
+        if scope == .audiobooks {
+          if bookModel.isLoading, bookModel.books.isEmpty {
+            ProgressView()
+          } else if bookModel.query.count >= 2, !bookModel.isLoading, bookModel.error == nil, bookModel.books.isEmpty {
+            ContentUnavailableView.search(text: bookModel.query)
+          }
+        } else if isSearching, scope != .genres, model.isLoading, model.result.artists.isEmpty, model.result.albums.isEmpty {
           ProgressView()
         } else if isSearching, scope != .genres, !model.isLoading, model.error == nil,
                   model.result.artists.isEmpty, model.result.albums.isEmpty, model.result.songs.isEmpty {
@@ -658,9 +668,15 @@ struct BlackboxRequestSearchView: View {
       .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
                   prompt: T("Songs, Interpreten, Alben, Genres"))
       .searchScopes($scope, activation: .onSearchPresentation) {
-        ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
+        ForEach(Scope.allCases) { Text(TV($0.rawValue)).tag($0) }
       }
-      .onChange(of: text) { _, newValue in model.search(newValue) }
+      .onChange(of: text) { _, newValue in
+        if scope == .audiobooks { bookModel.search(newValue) } else { model.search(newValue) }
+      }
+      .onChange(of: scope) { old, new in
+        if new == .audiobooks { bookModel.search(text, debounce: false) }
+        else if old == .audiobooks { model.search(text, debounce: false) }
+      }
       .onAppear {
         if !text.isEmpty, model.query.isEmpty { model.search(text, debounce: false) }
         if showsDiscover { discover.load() }
@@ -672,6 +688,7 @@ struct BlackboxRequestSearchView: View {
         case let .artist(id): BBRArtistDetailView(artistId: id, onChange: model.refresh)
         case .requests: BlackboxRequestsListView()
         case let .genre(id, name): BBRGenreView(genreId: id, name: name)
+        case let .book(id): BBRBookDetailView(bookId: id, onChange: bookModel.refresh)
         }
       }
       .toolbar {
@@ -931,7 +948,7 @@ final class BBRDiscoverModel: ObservableObject {
 }
 
 enum BBRRoute: Hashable {
-  case album(String), artist(String), requests, genre(String, String)
+  case album(String), artist(String), requests, genre(String, String), book(String)
 }
 
 struct BBRAlbumRow: View {
@@ -2054,6 +2071,231 @@ enum BlackboxLibraryNav {
       } else {
         delegate.eventLogger.info(topic: "Mediathek", message: BBL("Album ist noch nicht in der App – bitte Mediathek aktualisieren.", en: "Album is not in the app yet – please refresh the library."), displayPopup: true)
       }
+    }
+  }
+}
+
+
+// MARK: - Blackbox Request: Hörbücher (Audiobookshelf)
+
+struct BBRBook: Codable, Hashable, Identifiable, Sendable {
+  let id: String
+  let title: String
+  let subtitle: String?
+  let author: String
+  let narrator: String?
+  let cover: String?
+  let coverSmall: String?
+  let year: Int?
+  let runtimeMin: Int?
+  let series: String?
+  let sequence: String?
+  let description: String?
+  let abridged: Bool?
+  let inLibrary: Bool?
+  let request: BBRStatus?
+
+  var seriesText: String? {
+    guard let series, !series.isEmpty else { return nil }
+    guard let sequence, !sequence.isEmpty else { return series }
+    return series + BBL(", Band ", en: ", Book ") + sequence
+  }
+
+  var runtimeText: String? {
+    guard let m = runtimeMin, m > 0 else { return nil }
+    return m >= 60 ? BBL("\(m / 60) Std. \(m % 60) Min.", en: "\(m / 60) h \(m % 60) min") : BBL("\(m) Min.", en: "\(m) min")
+  }
+}
+
+private struct BBRBookList: Decodable { let books: [BBRBook] }
+
+extension BlackboxRequestClient {
+  func books(_ q: String) async throws -> [BBRBook] {
+    let enc = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+    let r: BBRBookList = try await send("/api/books/search?q=\(enc)")
+    return r.books
+  }
+
+  func book(_ id: String) async throws -> BBRBook {
+    let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+    return try await send("/api/books/\(enc)")
+  }
+}
+
+@MainActor
+final class BBRBookSearchModel: ObservableObject {
+  @Published var query = ""
+  @Published var books: [BBRBook] = []
+  @Published var isLoading = false
+  @Published var error: String?
+  private var task: Task<Void, Never>?
+
+  func search(_ q: String, debounce: Bool = true) {
+    task?.cancel()
+    let q = q.trimmingCharacters(in: .whitespacesAndNewlines)
+    query = q
+    guard q.count >= 2, BlackboxRequestConfig.isConfigured else {
+      books = []
+      isLoading = false
+      return
+    }
+    task = Task { [weak self] in
+      if debounce { try? await Task.sleep(nanoseconds: 500_000_000) }
+      guard !Task.isCancelled, let self else { return }
+      self.isLoading = true
+      do {
+        let r = try await BlackboxRequestClient().books(q)
+        guard !Task.isCancelled else { return }
+        self.books = r
+        self.error = nil
+      } catch {
+        guard !Task.isCancelled else { return }
+        self.error = error.localizedDescription
+      }
+      self.isLoading = false
+    }
+  }
+
+  func refresh() { search(query, debounce: false) }
+}
+
+struct BBRBookStateLabel: View {
+  let book: BBRBook
+
+  var body: some View {
+    if book.inLibrary == true {
+      Label(BBL("In Audiobookshelf", en: "In Audiobookshelf"), systemImage: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+    } else {
+      BBRStateLabel(inLibrary: false, request: book.request)
+    }
+  }
+}
+
+struct BBRBookResults: View {
+  @ObservedObject var model: BBRBookSearchModel
+
+  var body: some View {
+    if let error = model.error, model.query.count >= 2 {
+      Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+    }
+    if model.query.count < 2 {
+      Text(BBL(
+        "Hörbücher suchen und anfragen – sie werden automatisch in deine Audiobookshelf-Bibliothek einsortiert.",
+        en: "Search and request audiobooks – they are added to your Audiobookshelf library automatically."
+      ))
+      .foregroundStyle(.secondary)
+    } else if !model.books.isEmpty {
+      Section(TV("Hörbücher")) {
+        ForEach(model.books) { b in
+          NavigationLink(value: BBRRoute.book(b.id)) {
+            HStack(spacing: 12) {
+              BBRCover(url: b.coverSmall ?? b.cover, size: 56)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(b.title).lineLimit(2)
+                Text(b.author).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                if let s = b.seriesText {
+                  Text(s).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                BBRBookStateLabel(book: b).font(.caption)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+struct BBRBookDetailView: View {
+  let bookId: String
+  var onChange: () -> Void = {}
+
+  @State private var book: BBRBook?
+  @State private var error: String?
+  @State private var sending = false
+
+  private var busy: Bool {
+    ["pending", "searching", "downloading", "importing"].contains(book?.request?.status ?? "")
+  }
+
+  var body: some View {
+    List {
+      if let book {
+        Section {
+          VStack(spacing: 12) {
+            BBRCover(url: book.cover, size: 220)
+              .shadow(radius: 10, y: 4)
+            Text(book.title).font(.title2.bold()).multilineTextAlignment(.center)
+            if let sub = book.subtitle, !sub.isEmpty {
+              Text(sub).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
+            Text(book.author).font(.headline).foregroundStyle(Color.accentColor)
+            let facts = [
+              book.narrator.flatMap { $0.isEmpty ? nil : BBL("Gelesen von ", en: "Narrated by ") + $0 },
+              book.seriesText,
+              [book.year.map(String.init), book.runtimeText, book.abridged == true ? BBL("gekürzt", en: "abridged") : nil]
+                .compactMap { $0 }.joined(separator: " · "),
+            ].compactMap { $0 }.filter { !$0.isEmpty }
+            ForEach(facts, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
+          }
+          .frame(maxWidth: .infinity)
+          .listRowBackground(Color.clear)
+        }
+        Section {
+          if book.inLibrary == true {
+            BBRBookStateLabel(book: book)
+          } else if busy, let r = book.request {
+            BBRStateLabel(inLibrary: false, request: r)
+            if let msg = r.message { Text(msg).font(.footnote).foregroundStyle(.secondary) }
+          } else {
+            Button {
+              Task { await request() }
+            } label: {
+              Label(book.request == nil ? BBL("Hörbuch anfragen", en: "Request audiobook")
+                                        : BBL("Erneut anfragen", en: "Request again"),
+                    systemImage: "plus.circle.fill")
+            }
+            .disabled(sending)
+            if let r = book.request, let msg = r.message {
+              Text(msg).font(.footnote).foregroundStyle(.secondary)
+            }
+          }
+        }
+        if let d = book.description, !d.isEmpty {
+          Section(T("Beschreibung")) {
+            Text(d).font(.callout)
+          }
+        }
+      } else if let error {
+        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+      }
+    }
+    .overlay { if book == nil, error == nil { ProgressView() } }
+    .navigationTitle(book?.title ?? "")
+    .navigationBarTitleDisplayMode(.inline)
+    .task { await load() }
+    .refreshable { await load() }
+  }
+
+  private func load() async {
+    do {
+      book = try await BlackboxRequestClient().book(bookId)
+      error = nil
+    } catch {
+      self.error = error.localizedDescription
+    }
+  }
+
+  private func request() async {
+    sending = true
+    defer { sending = false }
+    do {
+      try await BlackboxRequestClient().request(kind: "audiobook", id: bookId)
+      await load()
+      onChange()
+    } catch {
+      self.error = error.localizedDescription
     }
   }
 }

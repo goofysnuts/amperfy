@@ -424,7 +424,14 @@ final class HomeVC: UICollectionViewController {
         return nil
       }
       header.title = section.title
-      if section == .randomAlbums {
+      header.buttonImage = section == .myPlaylists ? UIImage(systemName: "pin") : .refresh
+      if section == .myPlaylists {
+        header.showsRefreshButton = true
+        header.setRefreshHandler { [weak self] in
+          guard let self else { return }
+          BlackboxPlaylistPins.presentEditor(from: self, account: self.account)
+        }
+      } else if section == .randomAlbums {
         header.showsRefreshButton = true
         header.setRefreshHandler { [weak self] in self?.refreshRandomAlbumsSection() }
       } else if section == .randomArtists {
@@ -747,6 +754,16 @@ final class SectionHeaderView: UICollectionReusableView {
     lbl.textColor = .label
     return lbl
   }()
+
+  /// Blackbox: Symbol der Schaltfläche (Neu laden bzw. Anpinnen/Sortieren)
+  var buttonImage: UIImage? {
+    get { refreshButton.image(for: .normal) }
+    set {
+      refreshButton.setImage(newValue, for: .normal)
+      refreshButton.accessibilityLabel = newValue == .refresh ? T("Refresh Randoms")
+        : BBL("Playlists anpinnen und sortieren", en: "Pin and sort playlists")
+    }
+  }
 
   var showsRefreshButton: Bool {
     get { !refreshButton.isHidden }

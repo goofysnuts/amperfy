@@ -606,9 +606,16 @@ final class BBRSearchModel: ObservableObject {
 
 struct BlackboxRequestSearchView: View {
   enum Scope: String, CaseIterable, Identifiable {
-    case all = "Alle", songs = "Songs", artists = "Interpreten", albums = "Alben", genres = "Genres",
-         audiobooks = "Hörbücher"
+    case all = "Alle", songs = "Songs", artists = "Interpreten", albums = "Alben", genres = "Genres"
     var id: String { rawValue }
+  }
+
+  /// Musik und Hörbücher sind getrennt – umgeschaltet wird oben neben „Fertig“
+  enum Mode: String, CaseIterable, Identifiable {
+    case music, audiobooks
+    var id: String { rawValue }
+    var label: String { self == .music ? BBL("Musik", en: "Music") : TV("Hörbücher") }
+    var icon: String { self == .music ? "music.note" : "headphones" }
   }
 
   @StateObject private var model = BBRSearchModel()
@@ -616,6 +623,7 @@ struct BlackboxRequestSearchView: View {
   @StateObject private var discover = BBRDiscoverModel()
   @State private var text: String
   @State private var scope: Scope = .all
+  @State private var mode: Mode = .music
   @Environment(\.dismiss) private var dismiss
   private let showsDiscover: Bool
 
@@ -636,7 +644,7 @@ struct BlackboxRequestSearchView: View {
         if let error = model.error, isSearching {
           Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
         }
-        if scope == .audiobooks {
+        if mode == .audiobooks {
           BBRBookResults(model: bookModel)
         } else if scope == .genres {
           genreSection
@@ -648,7 +656,7 @@ struct BlackboxRequestSearchView: View {
       }
       .listStyle(.insetGrouped)
       .overlay {
-        if scope == .audiobooks {
+        if mode == .audiobooks {
           if bookModel.isLoading, bookModel.books.isEmpty {
             ProgressView()
           } else if bookModel.query.count >= 2, !bookModel.isLoading, bookModel.error == nil, bookModel.books.isEmpty {
@@ -663,19 +671,23 @@ struct BlackboxRequestSearchView: View {
           ProgressView()
         }
       }
-      .navigationTitle(showsDiscover ? "Musik hinzufügen" : "Musik anfragen")
+      .navigationTitle(mode == .audiobooks ? BBL("Hörbücher hinzufügen", en: "Add Audiobooks")
+                       : (showsDiscover ? T("Musik hinzufügen") : T("Musik anfragen")))
       .navigationBarTitleDisplayMode(.large)
       .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
-                  prompt: T("Songs, Interpreten, Alben, Genres"))
+                  prompt: mode == .audiobooks ? BBL("Titel, Autor oder Reihe", en: "Title, author or series")
+                    : T("Songs, Interpreten, Alben, Genres"))
       .searchScopes($scope, activation: .onSearchPresentation) {
-        ForEach(Scope.allCases) { Text(TV($0.rawValue)).tag($0) }
+        if mode == .music {
+          ForEach(Scope.allCases) { Text(TV($0.rawValue)).tag($0) }
+        }
       }
       .onChange(of: text) { _, newValue in
-        if scope == .audiobooks { bookModel.search(newValue) } else { model.search(newValue) }
+        if mode == .audiobooks { bookModel.search(newValue) } else { model.search(newValue) }
       }
-      .onChange(of: scope) { old, new in
-        if new == .audiobooks { bookModel.search(text, debounce: false) }
-        else if old == .audiobooks { model.search(text, debounce: false) }
+      .onChange(of: mode) { _, new in
+        scope = .all
+        if new == .audiobooks { bookModel.search(text, debounce: false) } else { model.search(text, debounce: false) }
       }
       .onAppear {
         if !text.isEmpty, model.query.isEmpty { model.search(text, debounce: false) }
@@ -694,6 +706,15 @@ struct BlackboxRequestSearchView: View {
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button(T("Fertig")) { dismiss() }
+        }
+        ToolbarItem(placement: .principal) {
+          Picker(BBL("Bereich", en: "Section"), selection: $mode) {
+            ForEach(Mode.allCases) { m in
+              Label(m.label, systemImage: m.icon).labelStyle(.titleOnly).tag(m)
+            }
+          }
+          .pickerStyle(.segmented)
+          .fixedSize()
         }
         ToolbarItem(placement: .primaryAction) {
           NavigationLink(value: BBRRoute.requests) {
@@ -2297,5 +2318,117 @@ struct BBRBookDetailView: View {
     } catch {
       self.error = error.localizedDescription
     }
+  }
+}
+
+// MARK: - Blackbox: angepinnte Playlists (Home "Deine Playlists", eigene Reihenfolge)
+
+enum BlackboxPlaylistPins {
+  static let changedNotification = Notification.Name("BlackboxPlaylistPinsChanged")
+
+  private static func key(_ account: AccountInfo) -> String { "blackbox.pinnedPlaylists.\(account.ident)" }
+
+  static func ids(account: AccountInfo) -> [String] {
+    UserDefaults.standard.stringArray(forKey: key(account)) ?? []
+  }
+
+  static func set(_ ids: [String], account: AccountInfo) {
+    var seen = Set<String>()
+    UserDefaults.standard.set(ids.filter { seen.insert($0).inserted }, forKey: key(account))
+    NotificationCenter.default.post(name: changedNotification, object: nil)
+  }
+
+  static func isPinned(_ id: String, account: AccountInfo) -> Bool { ids(account: account).contains(id) }
+
+  static func toggle(_ id: String, account: AccountInfo) {
+    var list = ids(account: account)
+    if let idx = list.firstIndex(of: id) { list.remove(at: idx) } else { list.append(id) }
+    set(list, account: account)
+  }
+
+  @MainActor
+  static func presentEditor(from presenter: UIViewController, account: Account) {
+    let host = UIHostingController(rootView: BlackboxPinnedPlaylistsView(account: account))
+    host.modalPresentationStyle = .formSheet
+    presenter.present(host, animated: true)
+  }
+}
+
+struct BlackboxPinnedPlaylistsView: View {
+  let account: Account
+  @Environment(\.dismiss) private var dismiss
+  @State private var all: [Playlist] = []
+  @State private var pinned: [Playlist] = []
+  @State private var others: [Playlist] = []
+
+  private var appDelegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  var body: some View {
+    NavigationStack {
+      List {
+        Section {
+          if pinned.isEmpty {
+            Text(BBL("Noch keine Playlist angepinnt. Tippe unten auf eine Playlist, um sie anzupinnen.",
+                     en: "No pinned playlists yet. Tap a playlist below to pin it."))
+              .foregroundStyle(.secondary)
+          }
+          ForEach(pinned, id: \.id) { p in
+            Label(p.name, systemImage: "pin.fill")
+          }
+          .onMove { from, to in
+            pinned.move(fromOffsets: from, toOffset: to)
+            save()
+          }
+          .onDelete { idx in
+            pinned.remove(atOffsets: idx)
+            save()
+          }
+        } header: {
+          Text(BBL("Angepinnt", en: "Pinned"))
+        } footer: {
+          Text(BBL("Angepinnte Playlists stehen auf Home unter „Deine Playlists“ ganz vorne – in dieser Reihenfolge. Zum Sortieren ziehen.",
+                   en: "Pinned playlists come first on Home under “Your Playlists”, in this order. Drag to sort."))
+        }
+        Section(BBL("Weitere Playlists", en: "More playlists")) {
+          ForEach(others, id: \.id) { p in
+            Button {
+              pinned.append(p)
+              save()
+            } label: {
+              HStack {
+                Text(p.name).foregroundStyle(Color.primary)
+                Spacer()
+                Image(systemName: "pin").foregroundStyle(Color.accentColor)
+              }
+            }
+          }
+        }
+      }
+      .environment(\.editMode, .constant(.active))
+      .navigationTitle(BBL("Playlists anpinnen", en: "Pin playlists"))
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button(T("Fertig")) { dismiss() }
+        }
+      }
+      .onAppear(perform: load)
+    }
+  }
+
+  private func load() {
+    all = appDelegate.storage.main.library.getPlaylists(for: account)
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    let ids = BlackboxPlaylistPins.ids(account: account.info)
+    let byId = Dictionary(all.map { ($0.id, $0) }) { first, _ in first }
+    pinned = ids.compactMap { byId[$0] }
+    let pinnedIds = Set(pinned.map(\.id))
+    others = all.filter { !pinnedIds.contains($0.id) }
+  }
+
+  private func save() {
+    BlackboxPlaylistPins.set(pinned.map(\.id), account: account.info)
+    let pinnedIds = Set(pinned.map(\.id))
+    others = all.filter { !pinnedIds.contains($0.id) }
   }
 }

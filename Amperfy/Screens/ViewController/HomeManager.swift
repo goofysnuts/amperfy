@@ -91,6 +91,8 @@ class HomeManager: NSObject {
   // FireSonic
   private var topMixesFetchController: PlaylistFetchedResultsController?
   private var ownMixesFetchController: PlaylistFetchedResultsController?
+  /// Blackbox: alle Playlists für "Deine Playlists" (angepinnte zuerst, in eigener Reihenfolge)
+  private var myPlaylistsFetchController: PlaylistFetchedResultsController?
   private var quickPlaylistsFetchController: PlaylistFetchedResultsController?
   private var quickAlbumsFetchController: AlbumFetchedResultsController?
   public static let quickAccessItemCount = 8
@@ -111,6 +113,13 @@ class HomeManager: NSObject {
     migrateFireSonicSections()
     migrateBlackboxSections()
     migrateGenresSection()
+    migrateMyPlaylistsSection()
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(pinnedPlaylistsChanged),
+      name: BlackboxPlaylistPins.changedNotification,
+      object: nil
+    )
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(playlistCategoriesChanged),
@@ -165,6 +174,43 @@ class HomeManager: NSObject {
       accountSettings.homeSectionOrder = order
     }
     orderedVisibleSections = visible
+  }
+
+  /// Blackbox: "Deine Playlists" einmalig hinter dem Schnellzugriff einfügen
+  private func migrateMyPlaylistsSection() {
+    let flagKey = "blackbox.homeSectionsMigrated.myPlaylists.\(account.info.ident)"
+    guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+    UserDefaults.standard.set(true, forKey: flagKey)
+    let settings = storage.settings.accounts.getSetting(account.info).read
+    guard !settings.homeSections.contains(.myPlaylists) else { return }
+    var visible = settings.homeSections
+    let anchor: HomeSection = visible.contains(.songOfTheDay) ? .songOfTheDay : .quickAccess
+    visible.insert(.myPlaylists, at: (visible.firstIndex(of: anchor).map { $0 + 1 }) ?? min(1, visible.count))
+    var order = settings.homeSectionOrder.filter { $0 != .myPlaylists }
+    order.insert(.myPlaylists, at: (order.firstIndex(of: anchor).map { $0 + 1 }) ?? min(1, order.count))
+    storage.settings.accounts.updateSetting(account.info) { accountSettings in
+      accountSettings.homeSections = visible
+      accountSettings.homeSectionOrder = order
+    }
+    orderedVisibleSections = visible
+  }
+
+  @objc
+  private func pinnedPlaylistsChanged() {
+    updateMyPlaylists()
+  }
+
+  func updateMyPlaylists() {
+    guard orderedVisibleSections.contains(.myPlaylists) else { return }
+    let all = playlists(of: myPlaylistsFetchController)
+    let pins = BlackboxPlaylistPins.ids(account: account.info)
+    let byId = Dictionary(all.map { ($0.id, $0) }) { first, _ in first }
+    let pinned = pins.compactMap { byId[$0] }
+    let pinnedIds = Set(pinned.map(\.id))
+    let rest = all.filter { !pinnedIds.contains($0.id) }
+    data[.myPlaylists] = (pinned + rest).prefix(max(Self.sectionMaxItemCount, pinned.count))
+      .map { HomeItem(section: .myPlaylists, playableContainable: $0) }
+    applySnapshotCB?()
   }
 
   /// Reloads the visible sections after they were edited in the settings
@@ -260,6 +306,23 @@ class HomeManager: NSObject {
   }
 
   private func createFireSonicFetchControllers() {
+    if orderedVisibleSections.contains(.myPlaylists) {
+      myPlaylistsFetchController?.delegate = nil
+      myPlaylistsFetchController = PlaylistFetchedResultsController(
+        coreDataCompanion: storage.main, account: account,
+        sortType: .name,
+        isGroupedInAlphabeticSections: false
+      )
+      myPlaylistsFetchController?.delegate = self
+      myPlaylistsFetchController?.search(
+        searchText: "",
+        playlistSearchCategory: isOfflineMode ? .cached : .all
+      )
+      updateMyPlaylists()
+    } else {
+      myPlaylistsFetchController?.delegate = nil
+      myPlaylistsFetchController = nil
+    }
     if orderedVisibleSections.contains(.topMixes) {
       topMixesFetchController?.delegate = nil
       topMixesFetchController = createMixFetchController(category: .topMix)
@@ -514,6 +577,7 @@ class HomeManager: NSObject {
     }
     if orderedVisibleSections.contains(where: {
       $0 == .lastTimePlayedPlaylists || $0 == .quickAccess || $0 == .topMixes || $0 == .ownMixes ||
+        $0 == .myPlaylists ||
         $0 == .recaps
     }) {
       Task { @MainActor in do {
@@ -699,6 +763,8 @@ extension HomeManager: @preconcurrency NSFetchedResultsControllerDelegate {
       } else if controller == ownMixesFetchController?.fetchResultsController {
         updateOwnMixes()
         updateQuickAccess()
+      } else if controller == myPlaylistsFetchController?.fetchResultsController {
+        updateMyPlaylists()
       } else if controller == quickPlaylistsFetchController?.fetchResultsController ||
         controller == quickAlbumsFetchController?.fetchResultsController {
         updateQuickAccess()

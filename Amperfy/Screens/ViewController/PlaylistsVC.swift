@@ -279,6 +279,16 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
     if appDelegate.storage.settings.user.isOnlineMode {
       barButtons.append(editButtonItem)
     }
+    // Blackbox: Playlists anpinnen und sortieren (Home "Deine Playlists")
+    let pinButton = UIBarButtonItem(
+      image: UIImage(systemName: "pin"),
+      primaryAction: UIAction { [weak self] _ in
+        guard let self else { return }
+        BlackboxPlaylistPins.presentEditor(from: self, account: self.account)
+      }
+    )
+    pinButton.accessibilityLabel = BBL("Playlists anpinnen", en: "Pin playlists")
+    barButtons.append(pinButton)
     navigationItem.rightBarButtonItems = barButtons
   }
 

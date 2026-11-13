@@ -863,5 +863,6 @@ enum BBTranslationTable {
     ("Deutsch", "German"),
     ("Die Sprache wird nach einem Neustart der App vollständig übernommen.", "The language is fully applied after restarting the app."),
     ("Hörbücher", "Audiobooks"),
+    ("Deine Playlists", "Your Playlists"),
   ]
 }

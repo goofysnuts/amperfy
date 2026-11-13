@@ -41,6 +41,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
   // Blackbox
   case recaps
   case songOfTheDay
+  case myPlaylists
 
   /// FireSonic sections that are added once to existing home settings
   public static let fireSonicSections: [HomeSection] = [.quickAccess, .topMixes, .ownMixes]
@@ -76,6 +77,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .ownMixes: return T("Deine Mixes")
     case .recaps: return T("Deine Rückblicke")
     case .songOfTheDay: return T("Song des Tages")
+    case .myPlaylists: return T("Deine Playlists")
     }
   }
 
@@ -96,7 +98,7 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
     case .randomGenres: return true
     case .randomSongs: return true
     case .frequentAlbums: return false
-    case .quickAccess, .topMixes, .ownMixes, .recaps, .songOfTheDay: return false
+    case .quickAccess, .topMixes, .ownMixes, .recaps, .songOfTheDay, .myPlaylists: return false
     }
   }
 }

@@ -167,6 +167,15 @@ class EntityPreviewActionBuilder {
     if isGoToSiteUrl, let url = (entityContainer as? AbstractPlayable)?.asRadio?.siteURL {
       elementHandlingActions.append(createGoToSiteUrl(url: url))
     }
+    if let playlist = entityContainer as? Playlist, let account = playlist.account {
+      let pinned = BlackboxPlaylistPins.isPinned(playlist.id, account: account.info)
+      elementHandlingActions.append(UIAction(
+        title: pinned ? BBL("Nicht mehr anpinnen", en: "Unpin") : BBL("Anpinnen", en: "Pin"),
+        image: UIImage(systemName: pinned ? "pin.slash" : "pin")
+      ) { _ in
+        BlackboxPlaylistPins.toggle(playlist.id, account: account.info)
+      })
+    }
     if !elementHandlingActions.isEmpty {
       menuActions.append(UIMenu(options: .displayInline, children: elementHandlingActions))
     }

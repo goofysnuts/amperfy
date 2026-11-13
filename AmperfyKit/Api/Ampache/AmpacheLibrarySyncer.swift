@@ -215,6 +215,9 @@ class AmpacheLibrarySyncer: CommonLibrarySyncer, LibrarySyncer {
   }
 
   @MainActor
+  func syncGenres() async throws {}
+
+  @MainActor
   func sync(genre: Genre) async throws {
     guard isSyncAllowed else { return }
     try await withThrowingTaskGroup(of: Void.self) { taskGroup in

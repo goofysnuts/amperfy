@@ -55,6 +55,11 @@ extension LibrarySyncerProxy: LibrarySyncer {
   }
 
   @MainActor
+  func syncGenres() async throws {
+    try await activeSyncer.syncGenres()
+  }
+
+  @MainActor
   func sync(artist: Artist) async throws {
     try await activeSyncer.sync(artist: artist)
   }

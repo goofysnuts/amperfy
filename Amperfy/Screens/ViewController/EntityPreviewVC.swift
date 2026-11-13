@@ -175,6 +175,24 @@ class EntityPreviewActionBuilder {
       ) { _ in
         BlackboxPlaylistPins.toggle(playlist.id, account: account.info)
       })
+      if PlaylistCategoryRegistry.category(ofPlaylistId: playlist.id) == nil {
+        let info = account.info
+        elementHandlingActions.append(UIAction(
+          title: BBL("Eigenes Cover wählen …", en: "Choose custom cover …"),
+          image: UIImage(systemName: "photo")
+        ) { _ in
+          BlackboxCoverPicker.pick(playlistId: playlist.id, account: info)
+        })
+        if BlackboxCustomCover.hasCover(playlistId: playlist.id, account: info) {
+          elementHandlingActions.append(UIAction(
+            title: BBL("Eigenes Cover entfernen", en: "Remove custom cover"),
+            image: UIImage(systemName: "photo.badge.minus"),
+            attributes: .destructive
+          ) { _ in
+            BlackboxCustomCover.remove(playlistId: playlist.id, account: info)
+          })
+        }
+      }
     }
     if !elementHandlingActions.isEmpty {
       menuActions.append(UIMenu(options: .displayInline, children: elementHandlingActions))

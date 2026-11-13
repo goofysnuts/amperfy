@@ -141,9 +141,11 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       searchTiles = ["All", "Cached"]
     }
     configureSearchController(
-      placeholder: "Search in \"\(sectionTitle(for: spotifyFilter))\"",
+      placeholder: T("Search in \"\(sectionTitle(for: spotifyFilter))\""),
       scopeButtonTitles: searchTiles
     )
+    // Blackbox: Suche immer sichtbar (wie bei den Alben)
+    navigationItem.hidesSearchBarWhenScrolling = false
     setNavBarTitle(title: sectionTitle(for: spotifyFilter))
 
     // Re-filter as soon as a playlist sync finds new or removed Spotify imports

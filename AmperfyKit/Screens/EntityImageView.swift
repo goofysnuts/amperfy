@@ -131,6 +131,12 @@ open class EntityImageView: UIView {
       displayGenreCover(genre: genre, accountInfo: accountInfo)
       return
     }
+    if let playlist = container as? Playlist, let accountInfo = playlist.account?.info,
+       let custom = BlackboxCustomCover.image(playlistId: playlist.id, account: accountInfo) {
+      coverRequestKey = "custom:" + playlist.id
+      showCoverOverlay(custom)
+      return
+    }
     guard let playlist = container as? Playlist,
           let accountInfo = playlist.account?.info,
           let coverArtId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
@@ -426,5 +432,81 @@ public final class GenreCoverResolver {
       UserDefaults.standard.set(ids, forKey: Self.storeKey)
     }
     return id
+  }
+}
+
+
+// MARK: - Blackbox: eigene Cover für Playlists (auf dem Gerät gespeichert)
+
+public enum BlackboxCustomCover {
+  public static let changedNotification = Notification.Name("BlackboxCustomCoverChanged")
+  nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
+  nonisolated(unsafe) private static let missing = NSCache<NSString, NSNumber>()
+
+  private static var directory: URL {
+    let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("BlackboxPlaylistCovers", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }
+
+  private static func key(_ playlistId: String, _ account: AccountInfo) -> String {
+    let raw = account.ident + "-" + playlistId
+    return raw.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }.joined()
+  }
+
+  private static func file(_ playlistId: String, _ account: AccountInfo) -> URL {
+    directory.appendingPathComponent(key(playlistId, account) + ".jpg")
+  }
+
+  public static func image(playlistId: String, account: AccountInfo) -> UIImage? {
+    let k = key(playlistId, account)
+    if let img = cache.object(forKey: k as NSString) { return img }
+    if missing.object(forKey: k as NSString) != nil { return nil }
+    guard let data = try? Data(contentsOf: file(playlistId, account)), let img = UIImage(data: data) else {
+      missing.setObject(1, forKey: k as NSString)
+      return nil
+    }
+    cache.setObject(img, forKey: k as NSString)
+    return img
+  }
+
+  public static func hasCover(playlistId: String, account: AccountInfo) -> Bool {
+    image(playlistId: playlistId, account: account) != nil
+  }
+
+  /// Ändert sich, wenn das Cover getauscht wird (für das Neuzeichnen der Kacheln)
+  public static func version(playlistId: String, account: AccountInfo) -> String? {
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: file(playlistId, account).path),
+          let date = attrs[.modificationDate] as? Date else { return nil }
+    return "custom-\(Int(date.timeIntervalSince1970))"
+  }
+
+  @MainActor
+  public static func set(_ image: UIImage, playlistId: String, account: AccountInfo) {
+    let side = min(image.size.width, image.size.height)
+    let crop = CGRect(x: (image.size.width - side) / 2, y: (image.size.height - side) / 2, width: side, height: side)
+    let target = CGSize(width: 900, height: 900)
+    let renderer = UIGraphicsImageRenderer(size: target)
+    let square = renderer.image { _ in
+      let scale = target.width / side
+      image.draw(in: CGRect(x: -crop.minX * scale, y: -crop.minY * scale,
+                            width: image.size.width * scale, height: image.size.height * scale))
+    }
+    guard let data = square.jpegData(compressionQuality: 0.85) else { return }
+    try? data.write(to: file(playlistId, account), options: .atomic)
+    let k = key(playlistId, account)
+    missing.removeObject(forKey: k as NSString)
+    cache.setObject(square, forKey: k as NSString)
+    NotificationCenter.default.post(name: changedNotification, object: nil)
+  }
+
+  @MainActor
+  public static func remove(playlistId: String, account: AccountInfo) {
+    try? FileManager.default.removeItem(at: file(playlistId, account))
+    let k = key(playlistId, account)
+    cache.removeObject(forKey: k as NSString)
+    missing.setObject(1, forKey: k as NSString)
+    NotificationCenter.default.post(name: changedNotification, object: nil)
   }
 }

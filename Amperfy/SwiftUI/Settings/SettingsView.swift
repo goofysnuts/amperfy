@@ -20,6 +20,7 @@
 //
 
 import AmperfyKit
+import PhotosUI
 import SwiftUI
 import UserNotifications
 
@@ -250,6 +251,8 @@ struct BlackboxSettingsSections: View {
         }
       }
       .id(accountsVersion)
+      BlackboxServerStatusRow()
+        .id("status-\(accountsVersion)")
       Button(T("Konto hinzufügen")) {
         let login = AppStoryboard.Main.segueToLogin()
         login.modalPresentationStyle = .formSheet
@@ -1184,7 +1187,19 @@ struct BBRArtistDetailView: View {
         ForEach(BBRAlbumGroup.groups(a.discography ?? [])) { group in
           Section(group.title) {
             ForEach(group.albums) { al in
-              NavigationLink(value: BBRRoute.album(al.id)) { BBRAlbumRow(album: al) }
+              HStack {
+                NavigationLink(value: BBRRoute.album(al.id)) { BBRAlbumRow(album: al) }
+                if al.inLibrary != true, al.request == nil || ["failed", "notfound"].contains(al.request?.status ?? "") {
+                  Button {
+                    Task { await requestAlbum(al) }
+                  } label: {
+                    Image(systemName: "plus.circle.fill").font(.title2)
+                  }
+                  .buttonStyle(.borderless)
+                  .disabled(sending)
+                  .accessibilityLabel(BBL("Album anfragen", en: "Request album"))
+                }
+              }
             }
           }
         }
@@ -1205,6 +1220,19 @@ struct BBRArtistDetailView: View {
 
   private func load() async {
     do { artist = try await BlackboxRequestClient().artist(artistId); error = nil } catch { self.error = error.localizedDescription }
+  }
+
+  private func requestAlbum(_ al: BBRAlbum) async {
+    sending = true
+    defer { sending = false }
+    do {
+      try await BlackboxRequestClient().request(kind: "album", id: al.id)
+      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      await load()
+      onChange()
+    } catch {
+      self.error = error.localizedDescription
+    }
   }
 
   private func send() async {
@@ -1612,8 +1640,38 @@ final class BlackboxArtistModel: ObservableObject {
   @Published var topSongs: [TopSong] = []
   @Published var similar: [Similar] = []
   @Published var loaded = false
+  /// Blackbox Request: Alben dieses Interpreten, die noch nicht in der Mediathek sind
+  @Published var missing: [BBRAlbum] = []
+  @Published var requesting = Set<String>()
 
   private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  func loadMissing() async {
+    guard BlackboxRequestConfig.isConfigured else { return }
+    let client = BlackboxRequestClient()
+    guard let result = try? await client.search(artist.name) else { return }
+    let want = artist.name.blackboxLooseKey
+    guard let match = result.artists.first(where: { $0.name.blackboxLooseKey == want }) ?? result.artists.first,
+          match.name.blackboxLooseKey == want || result.artists.count == 1,
+          let detail = try? await client.artist(match.id)
+    else { return }
+    missing = (detail.discography ?? []).filter { $0.inLibrary != true }
+  }
+
+  func request(_ album: BBRAlbum) async {
+    requesting.insert(album.id)
+    defer { requesting.remove(album.id) }
+    do {
+      _ = try await BlackboxRequestClient().request(kind: "album", id: album.id)
+      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      if let updated = try? await BlackboxRequestClient().album(album.id),
+         let idx = missing.firstIndex(where: { $0.id == album.id }) {
+        missing[idx] = updated
+      }
+    } catch {
+      delegate.eventLogger.info(topic: "Blackbox Request", message: error.localizedDescription, displayPopup: true)
+    }
+  }
 
   init(artist: Artist, account: Account) {
     self.artist = artist
@@ -1640,6 +1698,7 @@ final class BlackboxArtistModel: ObservableObject {
 
   func load() async {
     guard !loaded else { return }
+    Task { await loadMissing() }
     // Alben/Songs des Interpreten in die lokale Datenbank holen (für Wiedergabe und Album-Seiten)
     Task {
       try? await artist.fetch(
@@ -1787,6 +1846,7 @@ struct BlackboxArtistView: View {
         if !singles.isEmpty { albumShelf("Singles & EPs", singles) }
         let comps = model.albums.filter(isCompilation)
         if !comps.isEmpty { albumShelf("Compilations", comps) }
+        if !model.missing.isEmpty { missingShelf }
         aboutSection
         if !model.similar.isEmpty { similarShelf }
         Button(action: openAllSongs) {
@@ -1880,6 +1940,52 @@ struct BlackboxArtistView: View {
         .padding(.horizontal, 16)
       }
       .scrollTargetBehavior(.viewAligned)
+    }
+  }
+
+  // MARK: Nicht in der Mediathek – direkt anfragen (Blackbox Request)
+
+  private var missingShelf: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      sectionTitle(BBL("Nicht in deiner Mediathek", en: "Not in your library"))
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 14) {
+          ForEach(model.missing) { a in
+            VStack(alignment: .leading, spacing: 4) {
+              ZStack(alignment: .bottomTrailing) {
+                BBRCover(url: a.coverSmall ?? a.cover, size: 150)
+                  .opacity(a.request == nil ? 0.75 : 1)
+                requestBadge(a).padding(6)
+              }
+              Text(a.title).font(.subheadline).lineLimit(1)
+              Text([a.year.map(String.init), a.recordType == "single" ? "Single" : (a.recordType == "ep" ? "EP" : nil)]
+                .compactMap { $0 }.joined(separator: " · "))
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+              BBRStateLabel(inLibrary: false, request: a.request, partial: a.partialInfo).font(.caption2)
+            }
+            .frame(width: 150)
+          }
+        }
+        .padding(.horizontal, 16)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func requestBadge(_ a: BBRAlbum) -> some View {
+    if model.requesting.contains(a.id) {
+      ProgressView().frame(width: 40, height: 40).background(.ultraThinMaterial, in: Circle())
+    } else if a.request == nil || ["failed", "notfound"].contains(a.request?.status ?? "") {
+      Button {
+        Task { await model.request(a) }
+      } label: {
+        Image(systemName: "plus").font(.headline.weight(.bold)).frame(width: 40, height: 40)
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(.white)
+      .background(Color.accentColor, in: Circle())
+      .shadow(radius: 4, y: 2)
+      .accessibilityLabel(BBL("Album anfragen", en: "Request album"))
     }
   }
 
@@ -2053,9 +2159,142 @@ enum BlackboxRadio {
       delegate.eventLogger.info(topic: "Radio", message: BBL("Keine passenden Titel gefunden.", en: "No matching songs found."), displayPopup: true)
       return
     }
+    // erst eine Übersicht wie bei einer Playlist – in die Warteschlange kommt es beim Abspielen
     let songs = [song] + similar.shuffled()
-    delegate.player.play(context: PlayContext(name: "Radio: \(song.title)", playables: songs))
+    let host = UIHostingController(rootView: BlackboxRadioView(seed: song, songs: songs))
+    host.modalPresentationStyle = .pageSheet
+    if let sheet = host.sheetPresentationController {
+      sheet.detents = [.large()]
+      sheet.prefersGrabberVisible = true
+    }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    var top = scenes.flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController
+    while let presented = top?.presentedViewController { top = presented }
+    top?.present(host, animated: true)
+  }
+}
+
+/// Blackbox: Radio-Übersicht – Titel ansehen, einzelne entfernen, dann abspielen
+struct BlackboxRadioView: View {
+  let seed: Song
+  @State var songs: [Song]
+  @Environment(\.dismiss) private var dismiss
+  @State private var seedCover: UIImage?
+
+  private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+  private var name: String { "Radio: \(seed.title)" }
+
+  private var totalText: String {
+    let sec = songs.reduce(0) { $0 + $1.duration }
+    let h = sec / 3600, m = (sec % 3600) / 60
+    let dur = h > 0 ? BBL("\(h) Std. \(m) Min.", en: "\(h) h \(m) min") : BBL("\(m) Min.", en: "\(m) min")
+    return BBL("\(songs.count) Titel · \(dur)", en: "\(songs.count) songs · \(dur)")
+  }
+
+  var body: some View {
+    NavigationStack {
+      List {
+        Section {
+          VStack(spacing: 12) {
+            Group {
+              if let seedCover {
+                Image(uiImage: seedCover).resizable().scaledToFill()
+              } else {
+                ZStack {
+                  Color(uiColor: .secondarySystemFill)
+                  Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 54)).foregroundStyle(.secondary)
+                }
+              }
+            }
+            .frame(width: 200, height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(radius: 10, y: 4)
+            Text(name).font(.title2.bold()).multilineTextAlignment(.center)
+            Text(BBL("Passend zu „\(seed.title)“ von \(seed.creatorName)", en: "Based on “\(seed.title)” by \(seed.creatorName)"))
+              .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(totalText).font(.footnote).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+              Button { play(from: 0, shuffled: false) } label: {
+                Label(T("Abspielen"), systemImage: "play.fill").frame(maxWidth: .infinity, minHeight: 44)
+              }
+              .buttonStyle(.borderedProminent)
+              Button { play(from: 0, shuffled: true) } label: {
+                Label(T("Zufällig"), systemImage: "shuffle").frame(maxWidth: .infinity, minHeight: 44)
+              }
+              .buttonStyle(.bordered)
+            }
+            .padding(.top, 4)
+          }
+          .frame(maxWidth: .infinity)
+          .listRowBackground(Color.clear)
+        }
+        Section {
+          ForEach(Array(songs.enumerated()), id: \.element.id) { idx, song in
+            Button { play(from: idx, shuffled: false) } label: {
+              BlackboxRadioRow(song: song)
+            }
+            .buttonStyle(.plain)
+          }
+          .onDelete { songs.remove(atOffsets: $0) }
+        } footer: {
+          Text(BBL("Zum Entfernen nach links wischen. Erst beim Abspielen kommen die Titel in die Warteschlange.",
+                   en: "Swipe left to remove. Songs are only added to the queue when you start playing."))
+        }
+      }
+      .navigationTitle(BBL("Radio", en: "Radio"))
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button(T("Schließen")) { dismiss() }
+        }
+      }
+      .task {
+        guard let info = seed.account?.info,
+              let id = seed.artwork?.id ?? seed.album?.artwork?.id, !id.isEmpty else { return }
+        seedCover = await PlaylistCoverLoader.shared.image(coverArtId: id, accountInfo: info)
+      }
+    }
+  }
+
+  private func play(from index: Int, shuffled: Bool) {
+    guard !songs.isEmpty else { return }
+    let list = shuffled ? songs.shuffled() : Array(songs[index...]) + Array(songs[..<index])
+    delegate.player.play(context: PlayContext(name: name, playables: list))
     UINotificationFeedbackGenerator().notificationOccurred(.success)
+    dismiss()
+  }
+}
+
+struct BlackboxRadioRow: View {
+  let song: Song
+  @State private var cover: UIImage?
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Group {
+        if let cover {
+          Image(uiImage: cover).resizable().scaledToFill()
+        } else {
+          Color(uiColor: .secondarySystemFill)
+        }
+      }
+      .frame(width: 48, height: 48)
+      .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+      VStack(alignment: .leading, spacing: 2) {
+        Text(song.title).lineLimit(1)
+        Text(song.creatorName).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+      }
+      Spacer(minLength: 0)
+      Text(String(format: "%d:%02d", song.duration / 60, song.duration % 60))
+        .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+    }
+    .contentShape(Rectangle())
+    .task {
+      guard let info = song.account?.info,
+            let id = song.artwork?.id ?? song.album?.artwork?.id, !id.isEmpty else { return }
+      if let c = PlaylistCoverLoader.shared.cachedImage(coverArtId: id) { cover = c; return }
+      cover = await PlaylistCoverLoader.shared.image(coverArtId: id, accountInfo: info)
+    }
   }
 }
 
@@ -2432,3 +2671,119 @@ struct BlackboxPinnedPlaylistsView: View {
     others = all.filter { !pinnedIds.contains($0.id) }
   }
 }
+
+
+extension String {
+  /// Blackbox: Vergleichsschlüssel für Namen ($uicide = suicide, Groß-/Kleinschreibung, Satzzeichen egal)
+  var blackboxLooseKey: String {
+    let t = lowercased().replacingOccurrences(of: "$", with: "s").replacingOccurrences(of: "&", with: "and")
+      .folding(options: .diacriticInsensitive, locale: nil)
+    return String(t.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(Character.init))
+  }
+}
+
+
+// MARK: - Blackbox: Verbindungsstatus zum Server
+
+struct BlackboxServerStatusRow: View {
+  enum State: Equatable { case checking, online(Int), offline(String), offlineMode }
+  @SwiftUI.State private var state: State = .checking
+
+  private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
+
+  var body: some View {
+    HStack(spacing: 10) {
+      switch state {
+      case .checking:
+        ProgressView()
+        Text(BBL("Verbindung wird geprüft …", en: "Checking connection …")).foregroundStyle(.secondary)
+      case let .online(ms):
+        Image(systemName: "circle.fill").foregroundStyle(.green).font(.caption)
+        Text(BBL("Mit dem Server verbunden", en: "Connected to the server"))
+        Spacer()
+        Text("\(ms) ms").font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+      case let .offline(reason):
+        Image(systemName: "circle.fill").foregroundStyle(.red).font(.caption)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(BBL("Server nicht erreichbar", en: "Server not reachable"))
+          Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+      case .offlineMode:
+        Image(systemName: "airplane").foregroundStyle(.orange)
+        Text(BBL("Offline-Modus ist aktiv", en: "Offline mode is active"))
+      }
+      if state != .checking {
+        Spacer()
+        Button { Task { await check() } } label: { Image(systemName: "arrow.clockwise") }
+          .buttonStyle(.borderless)
+          .accessibilityLabel(BBL("Erneut prüfen", en: "Check again"))
+      }
+    }
+    .task { await check() }
+  }
+
+  private func check() async {
+    guard delegate.storage.settings.user.isOnlineMode else { state = .offlineMode; return }
+    guard let info = delegate.storage.settings.accounts.active,
+          let creds = delegate.storage.settings.accounts.getSetting(info).read.loginCredentials
+    else { state = .offline(BBL("Kein Konto aktiv.", en: "No active account.")); return }
+    state = .checking
+    let start = Date()
+    do {
+      try await delegate.getMeta(info).backendApi.isAuthenticationValid(credentials: creds)
+      state = .online(Int(Date().timeIntervalSince(start) * 1000))
+    } catch {
+      state = .offline(error.localizedDescription)
+    }
+  }
+}
+
+
+// MARK: - Blackbox: Bild für ein eigenes Playlist-Cover auswählen
+
+@MainActor
+final class BlackboxCoverPicker: NSObject, PHPickerViewControllerDelegate {
+  private static var current: BlackboxCoverPicker?
+  private let playlistId: String
+  private let account: AccountInfo
+
+  private init(playlistId: String, account: AccountInfo) {
+    self.playlistId = playlistId
+    self.account = account
+  }
+
+  static func pick(playlistId: String, account: AccountInfo) {
+    var config = PHPickerConfiguration()
+    config.filter = .images
+    config.selectionLimit = 1
+    let picker = PHPickerViewController(configuration: config)
+    let handler = BlackboxCoverPicker(playlistId: playlistId, account: account)
+    current = handler
+    picker.delegate = handler
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    var top = scenes.flatMap(\.windows).first(where: \.isKeyWindow)?.rootViewController
+    while let presented = top?.presentedViewController { top = presented }
+    top?.present(picker, animated: true)
+  }
+
+  nonisolated func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    let provider = results.first?.itemProvider
+    Task { @MainActor in
+      picker.dismiss(animated: true)
+      defer { if provider == nil { Self.current = nil } }
+      guard let provider, provider.canLoadObject(ofClass: UIImage.self) else { return }
+      provider.loadObject(ofClass: UIImage.self) { object, _ in
+        guard let image = object as? UIImage else { return }
+        let sendable = UncheckedImage(image: image)
+        Task { @MainActor in
+          if let handler = Self.current {
+            BlackboxCustomCover.set(sendable.image, playlistId: handler.playlistId, account: handler.account)
+          }
+          Self.current = nil
+        }
+      }
+    }
+  }
+}
+
+private struct UncheckedImage: @unchecked Sendable { let image: UIImage }

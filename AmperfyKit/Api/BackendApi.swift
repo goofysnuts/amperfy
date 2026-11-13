@@ -139,6 +139,9 @@ public protocol LibrarySyncer: Sendable {
   func syncInitial(statusNotifyier: SyncCallbacks?) async throws
   @MainActor
   func sync(genre: Genre) async throws
+  /// Blackbox: nur die Genre-Liste neu abgleichen (entfernt leere Genres)
+  @MainActor
+  func syncGenres() async throws
   @MainActor
   func sync(artist: Artist) async throws
   @MainActor

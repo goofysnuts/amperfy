@@ -42,7 +42,8 @@ struct HomeItem: Hashable, @unchecked Sendable {
   init(section: HomeSection, playableContainable: PlayableContainable) {
     if let playlist = playableContainable as? Playlist {
       self.artworkFingerprint = playlist.managedObject.artworkItems.map(\.objectID)
-      self.serverCoverId = PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
+      self.serverCoverId = playlist.account.flatMap { BlackboxCustomCover.version(playlistId: playlist.id, account: $0.info) }
+        ?? PlaylistCategoryRegistry.coverArtId(ofPlaylistId: playlist.id)
     } else {
       self.artworkFingerprint = []
       self.serverCoverId = nil
@@ -122,6 +123,12 @@ class HomeManager: NSObject {
     )
     NotificationCenter.default.addObserver(
       self,
+      selector: #selector(customCoverChanged),
+      name: BlackboxCustomCover.changedNotification,
+      object: nil
+    )
+    NotificationCenter.default.addObserver(
+      self,
       selector: #selector(playlistCategoriesChanged),
       name: PlaylistCategoryRegistry.changedNotification,
       object: nil
@@ -193,6 +200,24 @@ class HomeManager: NSObject {
       accountSettings.homeSectionOrder = order
     }
     orderedVisibleSections = visible
+  }
+
+  /// Blackbox: Genre-Liste einmal pro Start abgleichen – sonst bleiben leere Genres
+  /// (z. B. „Hip Hop“ neben „Hip-Hop“) bis zur nächsten vollständigen Synchronisation stehen
+  private static var genresSynced = Set<String>()
+  private func syncGenresOncePerLaunch() {
+    let ident = account.info.ident
+    guard !isOfflineMode, !Self.genresSynced.contains(ident) else { return }
+    Self.genresSynced.insert(ident)
+    let info = account.info
+    Task { @MainActor in
+      try? await (UIApplication.shared.delegate as! AppDelegate).getMeta(info).librarySyncer.syncGenres()
+    }
+  }
+
+  @objc
+  private func customCoverChanged() {
+    reloadSectionsFromSettings()
   }
 
   @objc
@@ -306,12 +331,14 @@ class HomeManager: NSObject {
   }
 
   private func createFireSonicFetchControllers() {
+    syncGenresOncePerLaunch()
     if orderedVisibleSections.contains(.myPlaylists) {
       myPlaylistsFetchController?.delegate = nil
       myPlaylistsFetchController = PlaylistFetchedResultsController(
         coreDataCompanion: storage.main, account: account,
         sortType: .name,
-        isGroupedInAlphabeticSections: false
+        isGroupedInAlphabeticSections: false,
+        categoryFilter: .regular
       )
       myPlaylistsFetchController?.delegate = self
       myPlaylistsFetchController?.search(

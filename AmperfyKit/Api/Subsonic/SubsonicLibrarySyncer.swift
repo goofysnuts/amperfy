@@ -47,6 +47,31 @@ class SubsonicLibrarySyncer: CommonLibrarySyncer, LibrarySyncer {
   }
 
   @MainActor
+  func syncGenres() async throws {
+    let genreResponse = try await subsonicServerApi.requestGenres()
+    try await storage.async.perform { asyncCompanion in
+      let accountAsync = Account(
+        managedObject: asyncCompanion.context
+          .object(with: self.accountObjectId) as! AccountMO
+      )
+      let idParserDelegate = SsIDsParserDelegate(performanceMonitor: self.performanceMonitor)
+      try self.parse(response: genreResponse, delegate: idParserDelegate, isThrowingErrorsAllowed: false)
+      let prefetch = asyncCompanion.library.getElements(
+        account: accountAsync,
+        prefetchIDs: idParserDelegate.prefetchIDs
+      )
+      let parserDelegate = SsGenreParserDelegate(
+        performanceMonitor: self.performanceMonitor,
+        prefetch: prefetch,
+        account: accountAsync,
+        library: asyncCompanion.library,
+        parseNotifier: nil
+      )
+      try self.parse(response: genreResponse, delegate: parserDelegate, isThrowingErrorsAllowed: false)
+    }
+  }
+
+  @MainActor
   func syncInitial(statusNotifyier: SyncCallbacks?) async throws {
     try await super.createCachedItemRepresentationsInCoreData(statusNotifyier: statusNotifyier)
 

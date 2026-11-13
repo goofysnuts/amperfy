@@ -267,6 +267,8 @@ struct BBRStatus: Codable, Hashable, Sendable {
 struct BBRTrack: Codable, Hashable, Sendable {
   let title: String?
   let duration: Int?
+  /// schon in der Mediathek?
+  var available: Bool? = nil
 }
 
 struct BBRAlbum: Codable, Hashable, Identifiable, Sendable {
@@ -283,6 +285,16 @@ struct BBRAlbum: Codable, Hashable, Identifiable, Sendable {
   let request: BBRStatus?
   let tracklist: [BBRTrack]?
   let genres: [String]?
+  /// Anzahl Titel dieses Albums in der Mediathek; partial = nur ein Teil davon
+  var libraryTracks: Int? = nil
+  var partial: Bool? = nil
+
+  var partialInfo: (have: Int, total: Int)? {
+    guard partial == true, let have = libraryTracks, let total = tracks else { return nil }
+    return (have, total)
+  }
+
+  var isBusy: Bool { ["pending", "searching", "downloading", "importing"].contains(request?.status ?? "") }
 }
 
 struct BBRArtist: Codable, Hashable, Identifiable, Sendable {
@@ -423,9 +435,9 @@ struct BlackboxRequestClient: Sendable {
   func requests() async throws -> [BBRRequest] { try await send("/api/requests") }
 
   @discardableResult
-  func request(kind: String, id: String) async throws -> BBRRequest {
+  func request(kind: String, id: String, replace: Bool = false) async throws -> BBRRequest {
     try await send("/api/requests", method: "POST",
-                   body: ["kind": kind, "id": id, "requestedBy": "Blackbox iOS"])
+                   body: ["kind": kind, "id": id, "requestedBy": "Blackbox iOS", "replace": replace ? "true" : "false"])
   }
 
   func retry(_ id: Int) async throws { let _: BBRRequest = try await send("/api/requests/\(id)/retry", method: "POST") }
@@ -510,9 +522,13 @@ struct BBRCover: View {
 struct BBRStateLabel: View {
   let inLibrary: Bool
   let request: BBRStatus?
+  var partial: (have: Int, total: Int)? = nil
 
   var body: some View {
-    if inLibrary {
+    let busy = ["pending", "searching", "downloading", "importing"].contains(request?.status ?? "")
+    if let p = partial, !busy {
+      Label("Teilweise (\(p.have) von \(p.total))", systemImage: "circle.lefthalf.filled").foregroundStyle(.orange)
+    } else if inLibrary {
       Label("In der Mediathek", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
     } else if let r = request {
       if r.status == "downloading", let p = r.progress, p > 0 {
@@ -675,7 +691,8 @@ struct BlackboxRequestSearchView: View {
               VStack(alignment: .leading, spacing: 2) {
                 Text(s.title).lineLimit(1)
                 Text("\(s.artist) · \(s.album.title)").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                BBRStateLabel(inLibrary: s.album.inLibrary == true, request: s.album.request).font(.caption)
+                BBRStateLabel(inLibrary: s.album.inLibrary == true, request: s.album.request,
+                              partial: s.album.partialInfo).font(.caption)
               }
             }
           }
@@ -904,7 +921,7 @@ struct BBRAlbumRow: View {
         Text(album.title).lineLimit(1)
         Text([album.artist, album.year.map(String.init)].compactMap { $0 }.joined(separator: " · "))
           .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-        BBRStateLabel(inLibrary: album.inLibrary == true, request: album.request).font(.caption)
+        BBRStateLabel(inLibrary: album.inLibrary == true, request: album.request, partial: album.partialInfo).font(.caption)
       }
     }
   }
@@ -918,6 +935,7 @@ struct BBRAlbumDetailView: View {
   @State private var album: BBRAlbum?
   @State private var error: String?
   @State private var sending = false
+  @State private var confirmReplace = false
 
   var body: some View {
     List {
@@ -939,16 +957,27 @@ struct BBRAlbumDetailView: View {
           .listRowBackground(Color.clear)
         }
         if let tracks = a.tracklist, !tracks.isEmpty {
-          Section("Titel") {
+          Section {
             ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
               HStack {
                 Text("\(i + 1)").foregroundStyle(.secondary).monospacedDigit().frame(width: 26, alignment: .trailing)
                 Text(t.title ?? "")
+                  .foregroundStyle(showsAvailability && t.available != true ? .secondary : .primary)
                 Spacer()
-                if let d = t.duration {
+                if showsAvailability {
+                  Image(systemName: t.available == true ? "checkmark.circle.fill" : "circle.dashed")
+                    .foregroundStyle(t.available == true ? Color.green : Color.secondary)
+                    .accessibilityLabel(t.available == true ? "In der Mediathek" : "Fehlt")
+                } else if let d = t.duration {
                   Text(String(format: "%d:%02d", d / 60, d % 60)).foregroundStyle(.secondary).monospacedDigit()
                 }
               }
+            }
+          } header: {
+            Text("Titel")
+          } footer: {
+            if showsAvailability, let have = a.libraryTracks {
+              Text("\(have) von \(tracks.count) Titeln sind in deiner Mediathek.")
             }
           }
         }
@@ -956,15 +985,45 @@ struct BBRAlbumDetailView: View {
         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
       }
     }
+    .confirmationDialog("Ganzes Album neu laden?", isPresented: $confirmReplace, titleVisibility: .visible) {
+      Button("Neu laden und ersetzen") { if let a = album { Task { await send(a, replace: true) } } }
+      Button("Abbrechen", role: .cancel) {}
+    } message: {
+      Text("Das komplette Album wird heruntergeladen. Die vorhandenen Dateien dieses Albums werden danach ersetzt.")
+    }
     .overlay { if album == nil, error == nil { ProgressView() } }
     .navigationTitle(album?.title ?? "")
     .navigationBarTitleDisplayMode(.inline)
     .task { await load() }
   }
 
+  private var showsAvailability: Bool { (album?.libraryTracks ?? 0) > 0 }
+
   @ViewBuilder
   private func actionButton(_ a: BBRAlbum) -> some View {
-    if a.inLibrary == true {
+    if a.isBusy, let r = a.request {
+      VStack(spacing: 6) {
+        BBRStateLabel(inLibrary: false, request: r).font(.headline)
+        if let m = r.message { Text(m).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center) }
+      }
+      .padding(.top, 4)
+    } else if a.partial == true {
+      VStack(spacing: 8) {
+        Label("\(a.libraryTracks ?? 0) von \(a.tracks ?? 0) Titeln in deiner Mediathek", systemImage: "circle.lefthalf.filled")
+          .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
+        Button {
+          confirmReplace = true
+        } label: {
+          Label(sending ? "Wird angefragt …" : "Ganzes Album neu laden", systemImage: "arrow.down.circle.fill")
+            .font(.headline)
+            .frame(maxWidth: 280, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        .disabled(sending)
+      }
+      .padding(.top, 4)
+    } else if a.inLibrary == true {
       Label("In deiner Mediathek", systemImage: "checkmark.circle.fill")
         .font(.headline).foregroundStyle(.green).padding(.top, 4)
     } else if let r = a.request {
@@ -992,11 +1051,11 @@ struct BBRAlbumDetailView: View {
     do { album = try await BlackboxRequestClient().album(albumId); error = nil } catch { self.error = error.localizedDescription }
   }
 
-  private func send(_ a: BBRAlbum) async {
+  private func send(_ a: BBRAlbum, replace: Bool = false) async {
     sending = true
     defer { sending = false }
     do {
-      try await BlackboxRequestClient().request(kind: "album", id: a.id)
+      try await BlackboxRequestClient().request(kind: "album", id: a.id, replace: replace)
       UINotificationFeedbackGenerator().notificationOccurred(.success)
       await load()
       onChange()

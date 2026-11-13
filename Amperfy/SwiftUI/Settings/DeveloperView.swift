@@ -32,7 +32,7 @@ struct DeveloperView: View {
     for artworkType in ArtworkType.allCases {
       for lightDarkMode in LightDarkModeType.allCases {
         for theme in ThemePreference.allCases {
-          let name = theme.description + artworkType.description + lightDarkMode
+          let name = theme.assetName + artworkType.description + lightDarkMode
             .description + ".png"
           let img = UIImage.generateArtwork(
             theme: theme,

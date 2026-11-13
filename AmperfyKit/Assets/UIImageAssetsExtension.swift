@@ -440,8 +440,8 @@ extension UIImage {
     artworkType: ArtworkType
   )
     -> UIImage {
-    let resourceName = "\(theme.description)\(artworkType.description)"
-    return UIImage(imageLiteralResourceName: resourceName)
+    let resourceName = "\(theme.assetName)\(artworkType.description)"
+    return UIImage(named: resourceName) ?? UIImage()
   }
 
   public static func generateArtwork(

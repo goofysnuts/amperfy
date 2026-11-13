@@ -271,6 +271,18 @@ public enum ThemePreference: Int, CaseIterable, Sendable, Codable {
 
   public static let defaultValue: ThemePreference = .blue
 
+  /// Blackbox: feste englische Namen für Asset-Dateien (nicht übersetzen!)
+  public var assetName: String {
+    switch self {
+    case .blue: return "Blue"
+    case .green: return "Green"
+    case .red: return "Red"
+    case .yellow: return "Yellow"
+    case .orange: return "Orange"
+    case .purple: return "Purple"
+    }
+  }
+
   public var description: String {
     switch self {
     case .blue:

@@ -2767,23 +2767,25 @@ final class BlackboxCoverPicker: NSObject, PHPickerViewControllerDelegate {
   }
 
   nonisolated func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    // Bild hier (nicht isoliert) laden und nur das fertige Bild an den Main Actor geben
     let provider = results.first?.itemProvider
-    Task { @MainActor in
-      picker.dismiss(animated: true)
-      defer { if provider == nil { Self.current = nil } }
-      guard let provider, provider.canLoadObject(ofClass: UIImage.self) else { return }
-      provider.loadObject(ofClass: UIImage.self) { object, _ in
-        guard let image = object as? UIImage else { return }
-        let sendable = UncheckedImage(image: image)
-        Task { @MainActor in
-          if let handler = Self.current {
-            BlackboxCustomCover.set(sendable.image, playlistId: handler.playlistId, account: handler.account)
-          }
-          Self.current = nil
+    let close = UncheckedPicker(picker: picker)
+    Task { @MainActor in close.picker.dismiss(animated: true) }
+    guard let provider, provider.canLoadObject(ofClass: UIImage.self) else {
+      Task { @MainActor in Self.current = nil }
+      return
+    }
+    provider.loadObject(ofClass: UIImage.self) { object, _ in
+      let sendable = (object as? UIImage).map { UncheckedImage(image: $0) }
+      Task { @MainActor in
+        if let sendable, let handler = Self.current {
+          BlackboxCustomCover.set(sendable.image, playlistId: handler.playlistId, account: handler.account)
         }
+        Self.current = nil
       }
     }
   }
 }
 
+private struct UncheckedPicker: @unchecked Sendable { let picker: PHPickerViewController }
 private struct UncheckedImage: @unchecked Sendable { let image: UIImage }

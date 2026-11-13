@@ -57,10 +57,10 @@ struct SettingsView: View {
     let list =
       SettingsList {
         SettingsSection {
-          SettingsRow(title: "Version") {
+          SettingsRow(title: T("Version")) {
             SecondaryText(AppDelegate.version)
           }
-          SettingsRow(title: "Build Number") {
+          SettingsRow(title: T("Build Number")) {
             SecondaryText(AppDelegate.buildNumber)
           }
         }
@@ -73,14 +73,14 @@ struct SettingsView: View {
 
         SettingsSection(
           content: {
-            SettingsCheckBoxRow(title: "Offline Mode", isOn: $settings.isOfflineMode)
+            SettingsCheckBoxRow(title: T("Offline Mode"), isOn: $settings.isOfflineMode)
           },
           footer:
           "Songs, podcasts, and artworks won’t download offline. Searches are limited to the device, and playlists won’t sync with the server."
         )
 
         SettingsSection {
-          SettingsRow(title: "Prevent Screen Lock") {
+          SettingsRow(title: T("Prevent Screen Lock")) {
             Menu(settings.screenLockPreventionPreference.description) {
               Button(
                 ScreenLockPreventionPreference.never.description,
@@ -125,12 +125,12 @@ struct SettingsView: View {
       ZStack {
         list
       }
-      .navigationTitle("General")
+      .navigationTitle(T("General"))
       .navigationBarTitleDisplayMode(.inline)
     #else
       NavigationStack {
         list
-          .navigationTitle("Settings")
+          .navigationTitle(T("Settings"))
           // All pushes in this stack must be value based. Mixing view based links
           // (NavigationLink(destination:)) with the value based links of the sub pages
           // results in a navigation loop.
@@ -162,6 +162,8 @@ struct BlackboxSettingsSections: View {
   private var useCustomAccent: Bool = BlackboxAppearance.customAccent != nil
   @State
   private var accountsVersion = 0
+  @State
+  private var language: BlackboxLanguage = BBLocale.setting
 
   private var delegate: AppDelegate { UIApplication.shared.delegate as! AppDelegate }
 
@@ -185,7 +187,7 @@ struct BlackboxSettingsSections: View {
 
   var body: some View {
     SettingsSection(content: {
-      SettingsRow(title: "Home-Überschrift") {
+      SettingsRow(title: T("Home-Überschrift")) {
         TextField("Home", text: $homeTitle)
           .multilineTextAlignment(.trailing)
           .submitLabel(.done)
@@ -193,18 +195,37 @@ struct BlackboxSettingsSections: View {
             BlackboxAppearance.homeTitle = newValue
           }
       }
-      SettingsCheckBoxRow(title: "Eigene Akzentfarbe", isOn: $useCustomAccent)
+      SettingsCheckBoxRow(title: T("Eigene Akzentfarbe"), isOn: $useCustomAccent)
         .onChange(of: useCustomAccent) { _, _ in applyAccent() }
       if useCustomAccent {
-        ColorPicker("Akzentfarbe", selection: $accent, supportsOpacity: false)
+        ColorPicker(BBL("Akzentfarbe", en: "Accent color"), selection: $accent, supportsOpacity: false)
           .onChange(of: accent) { _, _ in applyAccent() }
       }
-      Button("Home-Bereiche bearbeiten") {
+      Button(T("Home-Bereiche bearbeiten")) {
         guard let active = delegate.storage.settings.accounts.active,
               let presenter = topViewController() else { return }
         HomeVC.presentSectionEditor(from: presenter, accountInfo: active)
       }
-    }, footer: "Ohne eigene Akzentfarbe gilt die Theme-Farbe des Kontos.", header: "Blackbox")
+    }, footer: T("Ohne eigene Akzentfarbe gilt die Theme-Farbe des Kontos."), header: "Blackbox")
+
+    SettingsSection(content: {
+      Picker(T("Sprache"), selection: $language) {
+        ForEach(BlackboxLanguage.allCases, id: \.self) { lang in
+          Text(lang.label).tag(lang)
+        }
+      }
+      .onChange(of: language) { _, newValue in
+        BBLocale.setting = newValue
+      }
+      if language != BBLocale.startSetting {
+        Text(BBL(
+          "Die Sprache wird nach einem Neustart der App vollständig übernommen. App schließen (vom unteren Rand nach oben wischen) und neu öffnen.",
+          en: "The language is fully applied after restarting the app. Close the app (swipe up from the bottom) and open it again."
+        ))
+        .font(.footnote)
+        .foregroundStyle(Color.secondary)
+      }
+    }, header: T("Sprache"))
 
     SettingsSection(content: {
       let accounts = delegate.storage.settings.accounts
@@ -218,7 +239,7 @@ struct BlackboxSettingsSections: View {
           HStack {
             Image(systemName: "person.crop.circle")
             VStack(alignment: .leading) {
-              Text(creds?.username ?? "Unbekannt").foregroundStyle(Color.primary)
+              Text(creds?.username ?? BBL("Unbekannt", en: "Unknown")).foregroundStyle(Color.primary)
               Text(creds?.displayServerUrl ?? "").font(.caption).foregroundStyle(Color.secondary)
             }
             Spacer()
@@ -229,12 +250,12 @@ struct BlackboxSettingsSections: View {
         }
       }
       .id(accountsVersion)
-      Button("Konto hinzufügen") {
+      Button(T("Konto hinzufügen")) {
         let login = AppStoryboard.Main.segueToLogin()
         login.modalPresentationStyle = .formSheet
         topViewController()?.present(login, animated: true)
       }
-    }, header: "Konten")
+    }, header: T("Konten"))
   }
 }
 
@@ -357,14 +378,14 @@ struct BBRRequest: Codable, Hashable, Identifiable, Sendable {
 enum BBRStatusText {
   static func text(_ status: String) -> String {
     switch status {
-    case "pending": return "Wartet"
-    case "searching": return "Suche Release"
-    case "downloading": return "Lädt"
-    case "importing": return "Importiert"
-    case "available": return "Verfügbar"
-    case "notfound": return "Nicht gefunden"
-    case "failed": return "Fehlgeschlagen"
-    case "cancelled": return "Abgebrochen"
+    case "pending": return T("Wartet")
+    case "searching": return T("Suche Release")
+    case "downloading": return T("Lädt")
+    case "importing": return T("Importiert")
+    case "available": return T("Verfügbar")
+    case "notfound": return T("Nicht gefunden")
+    case "failed": return T("Fehlgeschlagen")
+    case "cancelled": return T("Abgebrochen")
     default: return status
     }
   }
@@ -384,8 +405,8 @@ struct BlackboxRequestClient: Sendable {
     case notConfigured, unauthorized, server(String)
     var errorDescription: String? {
       switch self {
-      case .notConfigured: return "Blackbox Request ist nicht eingerichtet (Einstellungen → Musik anfragen)."
-      case .unauthorized: return "API-Key fehlt oder ist falsch."
+      case .notConfigured: return T("Blackbox Request ist nicht eingerichtet (Einstellungen → Musik anfragen).")
+      case .unauthorized: return T("API-Key fehlt oder ist falsch.")
       case let .server(msg): return msg
       }
     }
@@ -529,9 +550,9 @@ struct BBRStateLabel: View {
   var body: some View {
     let busy = ["pending", "searching", "downloading", "importing"].contains(request?.status ?? "")
     if let p = partial, !busy {
-      Label("Teilweise (\(p.have) von \(p.total))", systemImage: "circle.lefthalf.filled").foregroundStyle(.orange)
+      Label(T("Teilweise (\(p.have) von \(p.total))"), systemImage: "circle.lefthalf.filled").foregroundStyle(.orange)
     } else if inLibrary {
-      Label("In der Mediathek", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+      Label(T("In der Mediathek"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
     } else if let r = request {
       if r.status == "downloading", let p = r.progress, p > 0 {
         Label("\(BBRStatusText.text(r.status)) \(Int(p * 100)) %", systemImage: "arrow.down.circle")
@@ -607,7 +628,7 @@ struct BlackboxRequestSearchView: View {
     NavigationStack {
       List {
         if !BlackboxRequestConfig.isConfigured {
-          Text("Trage unter Einstellungen → Musik anfragen die Adresse deines Blackbox-Request-Servers ein.")
+          Text(T("Trage unter Einstellungen → Musik anfragen die Adresse deines Blackbox-Request-Servers ein."))
             .foregroundStyle(.secondary)
         }
         if let error = model.error, isSearching {
@@ -635,7 +656,7 @@ struct BlackboxRequestSearchView: View {
       .navigationTitle(showsDiscover ? "Musik hinzufügen" : "Musik anfragen")
       .navigationBarTitleDisplayMode(.large)
       .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always),
-                  prompt: "Songs, Interpreten, Alben, Genres")
+                  prompt: T("Songs, Interpreten, Alben, Genres"))
       .searchScopes($scope, activation: .onSearchPresentation) {
         ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
       }
@@ -655,11 +676,11 @@ struct BlackboxRequestSearchView: View {
       }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Fertig") { dismiss() }
+          Button(T("Fertig")) { dismiss() }
         }
         ToolbarItem(placement: .primaryAction) {
           NavigationLink(value: BBRRoute.requests) {
-            Label("Meine Anfragen", systemImage: "tray.full")
+            Label(T("Meine Anfragen"), systemImage: "tray.full")
           }
         }
       }
@@ -671,14 +692,14 @@ struct BlackboxRequestSearchView: View {
   @ViewBuilder
   private var resultSections: some View {
     if (scope == .all || scope == .artists), !model.result.artists.isEmpty {
-      Section("Interpreten") {
+      Section(T("Interpreten")) {
         ForEach(model.result.artists) { a in
           NavigationLink(value: BBRRoute.artist(a.id)) { BBRArtistRow(artist: a) }
         }
       }
     }
     if (scope == .all || scope == .albums), !model.result.albums.isEmpty {
-      Section("Alben") {
+      Section(T("Alben")) {
         ForEach(model.result.albums) { a in
           NavigationLink(value: BBRRoute.album(a.id)) { BBRAlbumRow(album: a) }
         }
@@ -700,9 +721,9 @@ struct BlackboxRequestSearchView: View {
           }
         }
       } header: {
-        Text("Songs")
+        Text(T("Songs"))
       } footer: {
-        Text("Angefragt wird immer das ganze Album.")
+        Text(T("Angefragt wird immer das ganze Album."))
       }
     }
   }
@@ -713,7 +734,7 @@ struct BlackboxRequestSearchView: View {
   private var genreSection: some View {
     let q = text.trimmingCharacters(in: .whitespaces).lowercased()
     let list = discover.genres.filter { q.isEmpty || $0.name.lowercased().contains(q) }
-    Section("Genres") {
+    Section(T("Genres")) {
       if discover.genres.isEmpty {
         ProgressView().frame(maxWidth: .infinity).onAppear { discover.loadGenres() }
       }
@@ -750,7 +771,7 @@ struct BlackboxRequestSearchView: View {
           scope = .genres
           discover.loadGenres()
         } label: {
-          Label("Nach Genre stöbern", systemImage: "square.grid.2x2")
+          Label(T("Nach Genre stöbern"), systemImage: "square.grid.2x2")
         }
       }
     }
@@ -766,11 +787,11 @@ struct BBRArtistRow: View {
       VStack(alignment: .leading, spacing: 2) {
         Text(artist.name)
         if artist.inLibrary == true {
-          Text("In deiner Mediathek").font(.footnote).foregroundStyle(.green)
+          Text(T("In deiner Mediathek")).font(.footnote).foregroundStyle(.green)
         } else if let r = artist.request {
           Text(BBRStatusText.text(r.status)).font(.footnote).foregroundStyle(BBRStatusText.color(r.status))
         } else if let n = artist.albums {
-          Text("\(n) Alben").font(.footnote).foregroundStyle(.secondary)
+          Text(T("\(n) Alben")).font(.footnote).foregroundStyle(.secondary)
         }
       }
     }
@@ -835,11 +856,11 @@ struct BBRGenreView: View {
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
         } header: {
-          Text("Interpreten").font(.title3.bold()).foregroundStyle(.primary).textCase(nil)
+          Text(T("Interpreten")).font(.title3.bold()).foregroundStyle(.primary).textCase(nil)
         }
       }
       if !albums.isEmpty {
-        Section("Top-Alben") {
+        Section(T("Top-Alben")) {
           ForEach(albums) { a in
             NavigationLink(value: BBRRoute.album(a.id)) { BBRAlbumRow(album: a) }
           }
@@ -977,10 +998,10 @@ struct BBRAlbumDetailView: View {
               }
             }
           } header: {
-            Text("Titel")
+            Text(T("Titel"))
           } footer: {
             if showsAvailability, let have = a.libraryTracks {
-              Text("\(have) von \(tracks.count) Titeln sind in deiner Mediathek.")
+              Text(T("\(have) von \(tracks.count) Titeln sind in deiner Mediathek."))
             }
           }
         }
@@ -988,11 +1009,11 @@ struct BBRAlbumDetailView: View {
         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
       }
     }
-    .confirmationDialog("Ganzes Album neu laden?", isPresented: $confirmReplace, titleVisibility: .visible) {
-      Button("Neu laden und ersetzen") { if let a = album { Task { await send(a, replace: true) } } }
-      Button("Abbrechen", role: .cancel) {}
+    .confirmationDialog(T("Ganzes Album neu laden?"), isPresented: $confirmReplace, titleVisibility: .visible) {
+      Button(T("Neu laden und ersetzen")) { if let a = album { Task { await send(a, replace: true) } } }
+      Button(T("Abbrechen"), role: .cancel) {}
     } message: {
-      Text("Das komplette Album wird heruntergeladen. Die vorhandenen Dateien dieses Albums werden danach ersetzt.")
+      Text(T("Das komplette Album wird heruntergeladen. Die vorhandenen Dateien dieses Albums werden danach ersetzt."))
     }
     .overlay { if album == nil, error == nil { ProgressView() } }
     .navigationTitle(album?.title ?? "")
@@ -1012,10 +1033,10 @@ struct BBRAlbumDetailView: View {
       .padding(.top, 4)
     } else if a.partial == true {
       VStack(spacing: 8) {
-        Label("\(a.libraryTracks ?? 0) von \(a.tracks ?? 0) Titeln in deiner Mediathek", systemImage: "circle.lefthalf.filled")
+        Label(T("\(a.libraryTracks ?? 0) von \(a.tracks ?? 0) Titeln in deiner Mediathek"), systemImage: "circle.lefthalf.filled")
           .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
         if let lib = a.libraryId {
-          Button("Vorhandene Titel in der Mediathek öffnen") { BlackboxLibraryNav.openAlbum(id: lib) }
+          Button(T("Vorhandene Titel in der Mediathek öffnen")) { BlackboxLibraryNav.openAlbum(id: lib) }
             .font(.subheadline)
         }
         Button {
@@ -1032,10 +1053,10 @@ struct BBRAlbumDetailView: View {
       .padding(.top, 4)
     } else if a.inLibrary == true {
       VStack(spacing: 8) {
-        Label("In deiner Mediathek", systemImage: "checkmark.circle.fill")
+        Label(T("In deiner Mediathek"), systemImage: "checkmark.circle.fill")
           .font(.headline).foregroundStyle(.green)
         if let lib = a.libraryId {
-          Button("In der Mediathek öffnen") { BlackboxLibraryNav.openAlbum(id: lib) }
+          Button(T("In der Mediathek öffnen")) { BlackboxLibraryNav.openAlbum(id: lib) }
             .buttonStyle(.bordered).buttonBorderShape(.capsule)
         }
       }
@@ -1109,14 +1130,14 @@ struct BBRArtistDetailView: View {
               Button {
                 confirm = true
               } label: {
-                Label("\(missing.count) fehlende Alben anfragen", systemImage: "arrow.down.circle.fill")
+                Label(T("\(missing.count) fehlende Alben anfragen"), systemImage: "arrow.down.circle.fill")
                   .font(.headline).frame(maxWidth: 280, minHeight: 44)
               }
               .buttonStyle(.borderedProminent)
               .buttonBorderShape(.capsule)
               .disabled(sending)
             } else {
-              Label("Alle Alben vorhanden", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+              Label(T("Alle Alben vorhanden"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             }
           }
           .frame(maxWidth: .infinity)
@@ -1138,8 +1159,8 @@ struct BBRArtistDetailView: View {
     .navigationBarTitleDisplayMode(.inline)
     .confirmationDialog("Alle fehlenden Alben von \(artist?.name ?? "") anfragen?", isPresented: $confirm,
                         titleVisibility: .visible) {
-      Button("\(missing.count) Alben anfragen") { Task { await send() } }
-      Button("Abbrechen", role: .cancel) {}
+      Button(T("\(missing.count) Alben anfragen")) { Task { await send() } }
+      Button(T("Abbrechen"), role: .cancel) {}
     }
     .task { await load() }
   }
@@ -1196,11 +1217,11 @@ struct BlackboxRequestsListView: View {
         .swipeActions(edge: .trailing) {
           Button(role: .destructive) {
             Task { try? await BlackboxRequestClient().delete(r.id); await load() }
-          } label: { Label("Entfernen", systemImage: "trash") }
+          } label: { Label(T("Entfernen"), systemImage: "trash") }
           if r.status == "failed" || r.status == "notfound" {
             Button {
               Task { try? await BlackboxRequestClient().retry(r.id); await load() }
-            } label: { Label("Erneut", systemImage: "arrow.clockwise") }
+            } label: { Label(T("Erneut"), systemImage: "arrow.clockwise") }
               .tint(.orange)
           }
         }
@@ -1208,11 +1229,11 @@ struct BlackboxRequestsListView: View {
     }
     .overlay {
       if !loaded { ProgressView() } else if items.isEmpty, error == nil {
-        ContentUnavailableView("Keine Anfragen", systemImage: "tray",
-                               description: Text("Angefragte Alben und Interpreten erscheinen hier."))
+        ContentUnavailableView(T("Keine Anfragen"), systemImage: "tray",
+                               description: Text(T("Angefragte Alben und Interpreten erscheinen hier.")))
       }
     }
-    .navigationTitle("Meine Anfragen")
+    .navigationTitle(T("Meine Anfragen"))
     .refreshable { await load() }
     .task {
       // Fortschritt live aktualisieren, solange die Liste sichtbar ist
@@ -1240,7 +1261,7 @@ struct BlackboxRequestSettingsSection: View {
 
   var body: some View {
     SettingsSection(content: {
-      SettingsRow(title: "Adresse") {
+      SettingsRow(title: T("Adresse")) {
         TextField("http://192.168.30.145:8686", text: $url)
           .multilineTextAlignment(.trailing)
           .keyboardType(.URL)
@@ -1251,13 +1272,13 @@ struct BlackboxRequestSettingsSection: View {
             if !v.isEmpty { BlackboxRequestNotifier.requestPermission() }
           }
       }
-      SettingsRow(title: "API-Key") {
+      SettingsRow(title: T("API-Key")) {
         SecureField("optional", text: $apiKey)
           .multilineTextAlignment(.trailing)
           .textInputAutocapitalization(.never)
           .onChange(of: apiKey) { _, v in BlackboxRequestConfig.apiKey = v }
       }
-      Button("Verbindung testen") {
+      Button(T("Verbindung testen")) {
         testResult = "Teste …"
         Task {
           do { testResult = try await BlackboxRequestClient().health() } catch { testResult = error.localizedDescription }
@@ -1267,17 +1288,17 @@ struct BlackboxRequestSettingsSection: View {
       if let testResult {
         Text(testResult).font(.footnote).foregroundStyle(.secondary)
       }
-      Button("Musik suchen & anfragen") { showSearch = true }
+      Button(T("Musik suchen & anfragen")) { showSearch = true }
         .disabled(url.isEmpty)
-      Button("Meine Anfragen") { showRequests = true }
+      Button(T("Meine Anfragen")) { showRequests = true }
         .disabled(url.isEmpty)
-    }, footer: "Fehlende Alben und Interpreten über deinen Blackbox-Request-Server (NAS) laden. In der Suche erscheint dann „Nicht in deiner Mediathek“.",
-    header: "Musik anfragen")
+    }, footer: T("Fehlende Alben und Interpreten über deinen Blackbox-Request-Server (NAS) laden. In der Suche erscheint dann „Nicht in deiner Mediathek“."),
+    header: T("Musik anfragen"))
     .sheet(isPresented: $showSearch) { BlackboxRequestSearchView() }
     .sheet(isPresented: $showRequests) {
       NavigationStack {
         BlackboxRequestsListView()
-          .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Fertig") { showRequests = false } } }
+          .toolbar { ToolbarItem(placement: .confirmationAction) { Button(T("Fertig")) { showRequests = false } } }
       }
     }
   }
@@ -1295,9 +1316,9 @@ struct BlackboxRequestInlineView: View {
     VStack(alignment: .leading, spacing: 10) {
       if model.query.count >= 2 {
         HStack(alignment: .firstTextBaseline) {
-          Text("Nicht in deiner Mediathek").font(.title3.bold())
+          Text(T("Nicht in deiner Mediathek")).font(.title3.bold())
           Spacer()
-          Button("Alle") { onOpenAll(model.query) }
+          Button(T("Alle")) { onOpenAll(model.query) }
             .font(.body)
         }
         .padding(.horizontal, 16)
@@ -1308,7 +1329,7 @@ struct BlackboxRequestInlineView: View {
             } else if let error = model.error {
               Text(error)
             } else {
-              Text("Keine fehlenden Alben gefunden.")
+              Text(T("Keine fehlenden Alben gefunden."))
             }
           }
           .font(.footnote).foregroundStyle(.secondary)
@@ -1364,7 +1385,7 @@ struct BBRAlbumSheet: View {
     NavigationStack {
       BBRAlbumDetailView(albumId: albumId, onChange: onChange)
         .toolbar {
-          ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } }
+          ToolbarItem(placement: .confirmationAction) { Button(T("Fertig")) { dismiss() } }
         }
     }
   }
@@ -1411,7 +1432,7 @@ enum BlackboxRequestNotifier {
 
   private static func post(_ item: BlackboxRequestClient.Events.Item) async {
     let content = UNMutableNotificationContent()
-    content.title = "Neu in deiner Mediathek"
+    content.title = T("Neu in deiner Mediathek")
     content.body = "„\(item.title)“ von \(item.artist) ist jetzt verfügbar."
     content.sound = .default
     content.threadIdentifier = "blackbox-request"
@@ -1441,7 +1462,7 @@ enum NavidromeScanner {
     case noAccount, failed(String)
     var errorDescription: String? {
       switch self {
-      case .noAccount: return "Kein Konto aktiv."
+      case .noAccount: return T("Kein Konto aktiv.")
       case let .failed(m): return m
       }
     }
@@ -1482,18 +1503,18 @@ struct NavidromeScanSection: View {
         scan(full: false)
       } label: {
         HStack {
-          Text("Mediathek scannen")
+          Text(T("Mediathek scannen"))
           Spacer()
           if running { ProgressView() }
         }
       }
       .disabled(running)
-      Button("Vollständigen Scan starten") { scan(full: true) }
+      Button(T("Vollständigen Scan starten")) { scan(full: true) }
         .disabled(running)
       if let message {
         Text(message).font(.footnote).foregroundStyle(.secondary)
       }
-    }, footer: "Navidrome sucht nach neuen und geänderten Dateien. Der vollständige Scan liest alle Tags neu ein (dauert länger).",
+    }, footer: T("Navidrome sucht nach neuen und geänderten Dateien. Der vollständige Scan liest alle Tags neu ein (dauert länger)."),
     header: "Navidrome")
   }
 
@@ -1731,7 +1752,7 @@ struct BlackboxArtistView: View {
         aboutSection
         if !model.similar.isEmpty { similarShelf }
         Button(action: openAllSongs) {
-          Label("Alle Titel und Alben als Liste", systemImage: "list.bullet")
+          Label(T("Alle Titel und Alben als Liste"), systemImage: "list.bullet")
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
@@ -1866,7 +1887,7 @@ struct BlackboxArtistView: View {
           Button(bioExpanded ? "Weniger" : "Mehr") { withAnimation { bioExpanded.toggle() } }
             .font(.subheadline.weight(.semibold))
         } else if model.loaded {
-          Text("Keine Biografie verfügbar (in Navidrome einen Last.fm-API-Key hinterlegen).")
+          Text(T("Keine Biografie verfügbar (in Navidrome einen Last.fm-API-Key hinterlegen)."))
             .font(.footnote).foregroundStyle(.secondary)
         }
       }

@@ -62,7 +62,7 @@ class ArtistDiffableDataSource: BasicUITableViewDiffableDataSource {
       if artist.rating > 0 {
         return "\(artist.rating) Star\(artist.rating != 1 ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .duration:
       return artist.duration.description
@@ -162,7 +162,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
     change(sortType: appDelegate.storage.settings.user.artistsSortSetting)
     change(filterType: appDelegate.storage.settings.user.artistsFilterSetting)
     configureSearchController(
-      placeholder: "Search in \"\(filterTitle)\"",
+      placeholder: T("Search in \"\(filterTitle)\""),
       scopeButtonTitles: ["All", "Cached"]
     )
     tableView.register(nibName: GenericTableCell.typeName)
@@ -357,7 +357,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
          sectionNameInitial != SectionIndexType.noRatingIndexSymbol {
         return "\(sectionNameInitial) Star\(sectionNameInitial != "1" ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .newest:
       return super.tableView(tableView, titleForHeaderInSection: section)
@@ -398,7 +398,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
 
   private func createSortButtonMenu() -> UIMenu {
     let sortByName = UIAction(
-      title: "Name",
+      title: T("Name"),
       image: sortType == .name ? .check : nil,
       handler: { _ in
         self.change(sortType: .name)
@@ -411,7 +411,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
       }
     )
     let sortByRating = UIAction(
-      title: "Rating",
+      title: T("Rating"),
       image: sortType == .rating ? .check : nil,
       handler: { _ in
         self.change(sortType: .rating)
@@ -424,7 +424,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
       }
     )
     let sortByDuration = UIAction(
-      title: "Duration",
+      title: T("Duration"),
       image: sortType == .duration ? .check : nil,
       handler: { _ in
         self.change(sortType: .duration)
@@ -437,7 +437,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
       }
     )
     return UIMenu(
-      title: "Sort",
+      title: T("Sort"),
       image: .sort,
       options: [],
       children: [sortByName, sortByRating, sortByDuration]
@@ -446,21 +446,21 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
 
   private func createFilterButtonMenu() -> UIMenu {
     let filterAll = UIAction(
-      title: "All",
+      title: T("All"),
       image: displayFilter == .all ? .check : nil,
       handler: { _ in
         self.change(filterType: .all)
       }
     )
     let filterAlbumArtists = UIAction(
-      title: "Album Artists",
+      title: T("Album Artists"),
       image: displayFilter == .albumArtists ? .check : nil,
       handler: { _ in
         self.change(filterType: .albumArtists)
       }
     )
     return UIMenu(
-      title: "Filter",
+      title: T("Filter"),
       image: .filter,
       options: [],
       children: [filterAll, filterAlbumArtists]
@@ -469,7 +469,7 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
 
   private func createActionButtonMenu() -> UIMenu {
     let action = UIAction(
-      title: "Download \(filterTitle)",
+      title: T("Download \(filterTitle)"),
       image: UIImage.startDownload,
       handler: { _ in
         var artists = [Artist]()
@@ -486,15 +486,15 @@ class ArtistsVC: SingleSnapshotFetchedResultsTableViewController<ArtistMO> {
         let artistSongs = Array(artists.compactMap { $0.playables }.joined())
         if artistSongs.count > AppDelegate.maxPlayablesDownloadsToAddAtOnceWithoutWarning {
           let alert = UIAlertController(
-            title: "Many Songs",
-            message: "Are you sure to add \(artistSongs.count) songs from \"\(self.filterTitle)\" to download queue?",
+            title: T("Many Songs"),
+            message: T("Are you sure to add \(artistSongs.count) songs from \"\(self.filterTitle)\" to download queue?"),
             preferredStyle: .alert
           )
-          alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+          alert.addAction(UIAlertAction(title: T("OK"), style: .default, handler: { _ in
             self.appDelegate.getMeta(self.account.info).playableDownloadManager
               .download(objects: artistSongs)
           }))
-          alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+          alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel))
           self.present(alert, animated: true, completion: nil)
         } else {
           self.appDelegate.getMeta(self.account.info).playableDownloadManager

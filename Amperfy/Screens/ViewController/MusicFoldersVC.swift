@@ -46,8 +46,8 @@ class MusicFoldersVC: SingleFetchedResultsTableViewController<MusicFolderMO> {
     )
     singleFetchedResultsController = fetchedResultsController
 
-    configureSearchController(placeholder: "Search in \"Directories\"")
-    setNavBarTitle(title: "Directories")
+    configureSearchController(placeholder: T("Search in \"Directories\""))
+    setNavBarTitle(title: T("Directories"))
     tableView.register(nibName: DirectoryTableCell.typeName)
     tableView.reloadOnTextSizeChange { DirectoryTableCell.rowHeight }
     tableView.sectionFooterHeight = 0.0
@@ -74,7 +74,7 @@ class MusicFoldersVC: SingleFetchedResultsTableViewController<MusicFolderMO> {
   lazy var emptyContentConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .folder
-    config.text = "No Directories"
+    config.text = T("No Directories")
     config.secondaryText = "Your directories will appear here."
     return config
   }()

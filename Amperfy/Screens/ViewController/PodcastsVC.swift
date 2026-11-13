@@ -55,10 +55,10 @@ class PodcastsVC: MultiSourceTableViewController {
     )
 
     configureSearchController(
-      placeholder: "Search in \"Podcasts\"",
+      placeholder: T("Search in \"Podcasts\""),
       scopeButtonTitles: ["All", "Cached"]
     )
-    setNavBarTitle(title: "Podcasts")
+    setNavBarTitle(title: T("Podcasts"))
     tableView.register(nibName: GenericTableCell.typeName)
     tableView.register(nibName: PodcastEpisodeTableCell.typeName)
     tableView.reloadOnTextSizeChange()
@@ -144,7 +144,7 @@ class PodcastsVC: MultiSourceTableViewController {
   lazy var emptyPodcastConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .podcast
-    config.text = "No Podcasts"
+    config.text = T("No Podcasts")
     config.secondaryText = "Your podcasts will appear here."
     return config
   }()
@@ -152,7 +152,7 @@ class PodcastsVC: MultiSourceTableViewController {
   lazy var emptyEpisodeConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .podcastEpisode
-    config.text = "No Podcast Episodes"
+    config.text = T("No Podcast Episodes")
     config.secondaryText = "Your podcast episodes will appear here."
     return config
   }()
@@ -313,7 +313,7 @@ class PodcastsVC: MultiSourceTableViewController {
 
   private func createSortButtonMenu() -> UIMenu {
     let podcastsSortByName = UIAction(
-      title: "Podcasts sorted by name",
+      title: T("Podcasts sorted by name"),
       image: showType == .podcasts ? .check : nil,
       handler: { _ in
         self.showType = .podcasts
@@ -327,7 +327,7 @@ class PodcastsVC: MultiSourceTableViewController {
       }
     )
     let episodesSortByReleaseDate = UIAction(
-      title: "Episodes sorted by release date",
+      title: T("Episodes sorted by release date"),
       image: showType == .episodesSortedByReleaseDate ? .check : nil,
       handler: { _ in
         self.showType = .episodesSortedByReleaseDate

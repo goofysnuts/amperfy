@@ -58,7 +58,7 @@ class PodcastDetailVC: SingleFetchedResultsTableViewController<PodcastEpisodeMO>
     singleFetchedResultsController = fetchedResultsController
 
     configureSearchController(
-      placeholder: "Search in \"Podcast\"",
+      placeholder: T("Search in \"Podcast\""),
       scopeButtonTitles: ["All", "Cached"]
     )
     tableView.register(nibName: PodcastEpisodeTableCell.typeName)

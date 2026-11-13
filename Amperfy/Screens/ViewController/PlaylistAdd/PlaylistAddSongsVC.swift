@@ -209,7 +209,7 @@ class PlaylistAddSongsVC: SingleFetchedResultsTableViewController<SongMO>, Playl
          sectionNameInitial != SectionIndexType.noRatingIndexSymbol {
         return "\(sectionNameInitial) Star\(sectionNameInitial != "1" ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .addedDate:
       return nil

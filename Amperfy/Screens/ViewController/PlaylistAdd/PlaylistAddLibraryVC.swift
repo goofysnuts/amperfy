@@ -102,9 +102,9 @@ public class AddToPlaylistManager {
   var title: String {
     let count = elementsToAdd.count
     if count != 0 {
-      return "Add \(elementsToAdd.count) Songs to \"\(playlist.name)\""
+      return T("Add \(elementsToAdd.count) Songs to \"\(playlist.name)\"")
     } else {
-      return "Add Songs to \"\(playlist.name)\""
+      return T("Add Songs to \"\(playlist.name)\"")
     }
   }
 
@@ -156,7 +156,7 @@ public class AddToPlaylistManager {
         }
       ))
       if !useSingular {
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+        alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel, handler: { _ in
           // do nothing
           doneCB()
         }))
@@ -194,13 +194,13 @@ public class AddToPlaylistManager {
     if itemsNotContained.isEmpty {
       let alert = UIAlertController(
         title: nil,
-        message: "This Song is already in your Playlist.",
+        message: T("This Song is already in your Playlist."),
         preferredStyle: .alert
       )
-      alert.addAction(UIAlertAction(title: "Add Duplicate", style: .default, handler: { _ in
+      alert.addAction(UIAlertAction(title: T("Add Duplicate"), style: .default, handler: { _ in
         handleSuccessfullSelection(playables: [playable])
       }))
-      alert.addAction(UIAlertAction(title: "Skip", style: .cancel, handler: { _ in
+      alert.addAction(UIAlertAction(title: T("Skip"), style: .cancel, handler: { _ in
         isSelectedCB(false)
       }))
       rootVC.present(alert, animated: true, completion: nil)
@@ -215,7 +215,7 @@ public class AddToPlaylistManager {
 
   func createDoneButton() -> UIBarButtonItem {
     UIBarButtonItem(
-      title: "Done",
+      title: T("Done"),
       style: .plain,
       target: self,
       action: #selector(doneBarButtonPressed)
@@ -249,7 +249,7 @@ public class AddToPlaylistManager {
         if songsToAdd.count > Self.warningElementsToAddCount {
           self.appDelegate.eventLogger.info(
             topic: "Add Songs to Playlist",
-            message: "The Playlist \"\(self.playlist.name)\" has been successfully synced to the server."
+            message: T("The Playlist \"\(self.playlist.name)\" has been successfully synced to the server.")
           )
         }
       }
@@ -258,16 +258,16 @@ public class AddToPlaylistManager {
     if songsToAdd.count > Self.warningElementsToAddCount {
       let alert = UIAlertController(
         title: nil,
-        message: "Adding \(songsToAdd.count) Songs to this Playlist may cause performance issues during server synchronization.",
+        message: T("Adding \(songsToAdd.count) Songs to this Playlist may cause performance issues during server synchronization."),
         preferredStyle: .alert
       )
-      alert.addAction(UIAlertAction(title: "Add Songs Anyway", style: .default, handler: { _ in
+      alert.addAction(UIAlertAction(title: T("Add Songs Anyway"), style: .default, handler: { _ in
         uploadPlaylistChanges()
       }))
-      alert.addAction(UIAlertAction(title: "Abort", style: .default, handler: { _ in
+      alert.addAction(UIAlertAction(title: T("Abort"), style: .default, handler: { _ in
         self.rootView?.dismiss(animated: true, completion: nil)
       }))
-      alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+      alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel, handler: { _ in
         // do nothing
       }))
       rootView?.present(alert, animated: true, completion: nil)
@@ -284,7 +284,7 @@ public class AddToPlaylistManager {
       action: nil
     )
     let selectAllBarButton = UIBarButtonItem(
-      title: "All",
+      title: T("All"),
       style: .plain,
       target: viewVC,
       action: selectButtonSelector

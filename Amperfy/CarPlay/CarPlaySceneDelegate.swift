@@ -201,7 +201,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
   }()
 
   lazy var disconnectedTemplate = {
-    let disconnectedList = CPListTemplate(title: "Disconnected", sections: [])
+    let disconnectedList = CPListTemplate(title: T("Disconnected"), sections: [])
     return disconnectedList
   }()
 
@@ -216,20 +216,20 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
   }()
 
   lazy var playlistTab = {
-    let playlistTab = CPListTemplate(title: "Playlists", sections: [CPListSection]())
+    let playlistTab = CPListTemplate(title: T("Playlists"), sections: [CPListSection]())
     playlistTab.tabImage = UIImage.playlist
     return playlistTab
   }()
 
   lazy var libraryTab = {
-    let libraryTab = CPListTemplate(title: "Library", sections: createLibrarySections())
+    let libraryTab = CPListTemplate(title: T("Library"), sections: createLibrarySections())
     libraryTab.tabImage = UIImage.musicLibrary
     libraryTab.assistantCellConfiguration = CarPlaySceneDelegate.assistantConfig
     return libraryTab
   }()
 
   lazy var homeTab = {
-    let homeTab = CPListTemplate(title: "Home", sections: [])
+    let homeTab = CPListTemplate(title: T("Home"), sections: [])
     homeTab.tabImage = UIImage.home
     homeTab.assistantCellConfiguration = CarPlaySceneDelegate.assistantConfig
     return homeTab
@@ -247,146 +247,146 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
   var homeArtworkUpdate: [String: EntityImageRowContainer] = [:] // String is Artwork.uniqueID
 
   lazy var cachedTab = {
-    let cachedTab = CPListTemplate(title: "Cached", sections: createCachedSections())
+    let cachedTab = CPListTemplate(title: T("Cached"), sections: createCachedSections())
     cachedTab.tabImage = UIImage.cache
     return cachedTab
   }()
 
   lazy var accountSection = {
-    let template = CPListTemplate(title: "Switch Account", sections: [
+    let template = CPListTemplate(title: T("Switch Account"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var podcastSection = {
-    let template = CPListTemplate(title: "Podcasts", sections: [
+    let template = CPListTemplate(title: T("Podcasts"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var podcastCachedSection = {
-    let template = CPListTemplate(title: "Cached Podcasts", sections: [
+    let template = CPListTemplate(title: T("Cached Podcasts"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var genresSection = {
-    let template = CPListTemplate(title: "Genres", sections: [
+    let template = CPListTemplate(title: T("Genres"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var genresCachedSection = {
-    let template = CPListTemplate(title: "Cached Genres", sections: [
+    let template = CPListTemplate(title: T("Cached Genres"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var artistsSection = {
-    let template = CPListTemplate(title: "Artists", sections: [
+    let template = CPListTemplate(title: T("Artists"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var artistsCachedSection = {
-    let template = CPListTemplate(title: "Cached Artists", sections: [
+    let template = CPListTemplate(title: T("Cached Artists"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var artistsFavoriteSection = {
-    let template = CPListTemplate(title: "Favorite Artists", sections: [
+    let template = CPListTemplate(title: T("Favorite Artists"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var artistsFavoriteCachedSection = {
-    let template = CPListTemplate(title: "Favorite Cached Artists", sections: [
+    let template = CPListTemplate(title: T("Favorite Cached Artists"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsSection = {
-    let template = CPListTemplate(title: "Albums", sections: [
+    let template = CPListTemplate(title: T("Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsCachedSection = {
-    let template = CPListTemplate(title: "Cached Albums", sections: [
+    let template = CPListTemplate(title: T("Cached Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsFavoriteSection = {
-    let template = CPListTemplate(title: "Favorite Albums", sections: [
+    let template = CPListTemplate(title: T("Favorite Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsFavoriteCachedSection = {
-    let template = CPListTemplate(title: "Favorite Cached Albums", sections: [
+    let template = CPListTemplate(title: T("Favorite Cached Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsNewestSection = {
-    let template = CPListTemplate(title: "Newest Albums", sections: [
+    let template = CPListTemplate(title: T("Newest Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsNewestCachedSection = {
-    let template = CPListTemplate(title: "Newest Cached Albums", sections: [
+    let template = CPListTemplate(title: T("Newest Cached Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsRecentSection = {
-    let template = CPListTemplate(title: "Recently Played Albums", sections: [
+    let template = CPListTemplate(title: T("Recently Played Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var albumsRecentCachedSection = {
-    let template = CPListTemplate(title: "Recently Played Cached Albums", sections: [
+    let template = CPListTemplate(title: T("Recently Played Cached Albums"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var songsFavoriteSection = {
-    let template = CPListTemplate(title: "Favorite Songs", sections: [
+    let template = CPListTemplate(title: T("Favorite Songs"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var songsFavoriteCachedSection = {
-    let template = CPListTemplate(title: "Favorite Cached Songs", sections: [
+    let template = CPListTemplate(title: T("Favorite Cached Songs"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template
   }()
 
   lazy var radioSection = {
-    let template = CPListTemplate(title: "Radios", sections: [
+    let template = CPListTemplate(title: T("Radios"), sections: [
       CPListSection(items: [CPListTemplateItem]()),
     ])
     return template

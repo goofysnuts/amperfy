@@ -256,9 +256,12 @@ public enum BBLocale {
     set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
   }
 
+  /// Einstellung zum Zeitpunkt des App-Starts
+  public static let startSetting: BlackboxLanguage = setting
+
   /// beim Start festgelegt – ein Wechsel wird nach dem Neustart der App aktiv
   public static let isGerman: Bool = {
-    switch setting {
+    switch startSetting {
     case .de: return true
     case .en: return false
     case .system: return Locale.preferredLanguages.first?.lowercased().hasPrefix("de") ?? false

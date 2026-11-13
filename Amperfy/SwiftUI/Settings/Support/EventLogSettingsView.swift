@@ -34,7 +34,7 @@ struct EventLogSettingsView: View {
         ContentUnavailableView(
           "No Events",
           systemImage: "list.bullet.rectangle",
-          description: Text("Errors and other events will be listed here.")
+          description: Text(T("Errors and other events will be listed here."))
         )
       } else {
         List {
@@ -49,7 +49,7 @@ struct EventLogSettingsView: View {
         #endif
       }
     }
-    .navigationTitle("Event Log")
+    .navigationTitle(T("Event Log"))
   }
 }
 

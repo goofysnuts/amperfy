@@ -72,7 +72,7 @@ class PlaylistAddAlbumDetailVC: SingleSnapshotFetchedResultsTableViewController<
     singleFetchedResultsController?.fetch()
 
     configureSearchController(
-      placeholder: "Search in \"Album\"",
+      placeholder: T("Search in \"Album\""),
       scopeButtonTitles: ["All", "Cached"]
     )
     tableView.register(nibName: PlayableTableCell.typeName)

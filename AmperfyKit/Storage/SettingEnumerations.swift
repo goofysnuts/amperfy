@@ -36,11 +36,11 @@ public enum ArtworkDownloadSetting: Int, CaseIterable, Sendable, Codable {
   public var description: String {
     switch self {
     case .updateOncePerSession:
-      return "Download once per session (change detection)"
+      return T("Download once per session (change detection)")
     case .onlyOnce:
-      return "Download only once"
+      return T("Download only once")
     case .never:
-      return "Never"
+      return T("Never")
     }
   }
 }
@@ -58,13 +58,13 @@ public enum ArtworkDisplayPreference: Int, CaseIterable, Sendable, Codable {
   public var description: String {
     switch self {
     case .id3TagOnly:
-      return "Only ID3 tag artworks"
+      return T("Only ID3 tag artworks")
     case .serverArtworkOnly:
-      return "Only server artworks"
+      return T("Only server artworks")
     case .preferServerArtwork:
-      return "Prefer server artwork over ID3 tag"
+      return T("Prefer server artwork over ID3 tag")
     case .preferId3Tag:
-      return "Prefer ID3 tag over server artwork"
+      return T("Prefer ID3 tag over server artwork")
     }
   }
 }
@@ -81,11 +81,11 @@ public enum ScreenLockPreventionPreference: Int, CaseIterable, Sendable, Codable
   public var description: String {
     switch self {
     case .always:
-      return "Always"
+      return T("Always")
     case .never:
-      return "Never"
+      return T("Never")
     case .onlyIfCharging:
-      return "When connected to charger"
+      return T("When connected to charger")
     }
   }
 }
@@ -107,7 +107,7 @@ public enum StreamingMaxBitratePreference: Int, CaseIterable, Sendable, Codable 
   public var description: String {
     switch self {
     case .noLimit:
-      return "No Limit (default)"
+      return T("No Limit (default)")
     default:
       return "\(rawValue) kbps"
     }
@@ -143,9 +143,9 @@ public enum StreamingFormatPreference: Int, CaseIterable, Sendable, Codable {
     case .mp3:
       return "mp3 (default)"
     case .raw:
-      return "Raw/Original"
+      return T("Raw/Original")
     case .serverConfig:
-      return "Server chooses Codec"
+      return T("Server chooses Codec")
     }
   }
 }
@@ -217,10 +217,10 @@ public enum EqualizerPreset: Int, CaseIterable, Sendable, Codable {
 
   public var description: String {
     switch self {
-    case .off: return "Off"
-    case .increasedBass: return "Increased Bass"
-    case .reducedBass: return "Reduced Bass"
-    case .increasedTreble: return "Increased Treble"
+    case .off: return T("Off")
+    case .increasedBass: return T("Increased Bass")
+    case .reducedBass: return T("Reduced Bass")
+    case .increasedTreble: return T("Increased Treble")
     }
   }
 
@@ -250,11 +250,11 @@ public enum SyncCompletionStatus: Int, CaseIterable, Sendable, Codable {
   public var description: String {
     switch self {
     case .completed:
-      return "Completed"
+      return T("Completed")
     case .skipped:
-      return "Skipped"
+      return T("Skipped")
     case .aborted:
-      return "Aborted"
+      return T("Aborted")
     }
   }
 }
@@ -274,17 +274,17 @@ public enum ThemePreference: Int, CaseIterable, Sendable, Codable {
   public var description: String {
     switch self {
     case .blue:
-      return "Blue"
+      return T("Blue")
     case .green:
-      return "Green"
+      return T("Green")
     case .red:
-      return "Red"
+      return T("Red")
     case .yellow:
-      return "Yellow"
+      return T("Yellow")
     case .orange:
-      return "Orange"
+      return T("Orange")
     case .purple:
-      return "Purple"
+      return T("Purple")
     }
   }
 
@@ -356,9 +356,9 @@ public enum CacheTranscodingFormatPreference: Int, CaseIterable, Sendable, Codab
     case .mp3:
       return "mp3 (default)"
     case .raw:
-      return "Raw/Original"
+      return T("Raw/Original")
     case .serverConfig:
-      return "Server chooses Codec"
+      return T("Server chooses Codec")
     }
   }
 }
@@ -375,10 +375,10 @@ public enum VisualizerType: String, CaseIterable, Sendable, Codable {
 
   public var displayName: String {
     switch self {
-    case .ring: return "Ring"
-    case .waveform: return "Waveform"
-    case .spectrumBars: return "Spectrum Bars"
-    case .generativeArt: return "Generative Art"
+    case .ring: return T("Ring")
+    case .waveform: return T("Waveform")
+    case .spectrumBars: return T("Spectrum Bars")
+    case .generativeArt: return T("Generative Art")
     }
   }
 

@@ -52,10 +52,10 @@ class PlaylistAddGenresVC: SingleFetchedResultsTableViewController<GenreMO>, Pla
     singleFetchedResultsController = fetchedResultsController
 
     configureSearchController(
-      placeholder: "Search in \"Genres\"",
+      placeholder: T("Search in \"Genres\""),
       scopeButtonTitles: ["All", "Cached"]
     )
-    setNavBarTitle(title: "Genres")
+    setNavBarTitle(title: T("Genres"))
     tableView.register(nibName: GenericTableCell.typeName)
     tableView.reloadOnTextSizeChange { GenericTableCell.rowHeightWithoutImage }
     tableView.sectionHeaderHeight = 0.0

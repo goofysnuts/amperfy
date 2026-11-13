@@ -60,22 +60,22 @@ public enum HomeSection: Int, Sendable, CaseIterable, Codable {
 
   public var title: String {
     switch self {
-    case .recentlyPlayedAlbums: return "Recently Played Albums"
-    case .newestAlbums: return "Newest Albums"
-    case .randomAlbums: return "Random Albums"
-    case .lastTimePlayedPlaylists: return "Recently Played Playlists"
-    case .newestPodcastEpisodes: return "Newest Podcast Episodes"
-    case .podcasts: return "Podcasts"
-    case .radios: return "Radios"
-    case .randomArtists: return "Random Artists"
-    case .randomGenres: return "Genres"
-    case .randomSongs: return "Random Songs"
-    case .frequentAlbums: return "Frequently Played Albums"
-    case .quickAccess: return "Schnellzugriff"
-    case .topMixes: return "Spotify-Mixes"
-    case .ownMixes: return "Deine Mixes"
-    case .recaps: return "Deine Rückblicke"
-    case .songOfTheDay: return "Song des Tages"
+    case .recentlyPlayedAlbums: return T("Recently Played Albums")
+    case .newestAlbums: return T("Newest Albums")
+    case .randomAlbums: return T("Random Albums")
+    case .lastTimePlayedPlaylists: return T("Recently Played Playlists")
+    case .newestPodcastEpisodes: return T("Newest Podcast Episodes")
+    case .podcasts: return T("Podcasts")
+    case .radios: return T("Radios")
+    case .randomArtists: return T("Random Artists")
+    case .randomGenres: return T("Genres")
+    case .randomSongs: return T("Random Songs")
+    case .frequentAlbums: return T("Frequently Played Albums")
+    case .quickAccess: return T("Schnellzugriff")
+    case .topMixes: return T("Spotify-Mixes")
+    case .ownMixes: return T("Deine Mixes")
+    case .recaps: return T("Deine Rückblicke")
+    case .songOfTheDay: return T("Song des Tages")
     }
   }
 

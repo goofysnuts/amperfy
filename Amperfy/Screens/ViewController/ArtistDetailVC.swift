@@ -69,7 +69,7 @@ class ArtistDetailVC: MultiSourceTableViewController {
     tableView.sectionFooterHeight = 0.0
     tableView.estimatedSectionFooterHeight = 0.0
 
-    configureSearchController(placeholder: "Albums and Songs", scopeButtonTitles: ["All", "Cached"])
+    configureSearchController(placeholder: T("Albums and Songs"), scopeButtonTitles: ["All", "Cached"])
     let playShuffleInfoConfig = PlayShuffleInfoConfiguration(
       infoCB: {
         "\(self.artist.albumCount) Album\(self.artist.albumCount == 1 ? "" : "s") \(CommonString.oneMiddleDot) \(self.artist.songCount) Song\(self.artist.songCount == 1 ? "" : "s")"
@@ -243,9 +243,9 @@ class ArtistDetailVC: MultiSourceTableViewController {
     -> String? {
     switch section + 1 {
     case LibraryElement.Album.rawValue:
-      return "Albums"
+      return T("Albums")
     case LibraryElement.Song.rawValue:
-      return "Songs"
+      return T("Songs")
     default:
       return ""
     }

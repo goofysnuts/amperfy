@@ -48,7 +48,7 @@ public enum BackenApiType: Int, Sendable, Codable {
 
   public var selectorDescription: String {
     switch self {
-    case .notDetected: return "Auto-Detect"
+    case .notDetected: return T("Auto-Detect")
     case .ampache: return "Ampache"
     case .subsonic: return "Subsonic"
     case .subsonic_legacy: return "Subsonic (legacy login)"

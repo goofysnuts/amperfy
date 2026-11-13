@@ -52,14 +52,14 @@ extension AppDelegate {
       let fileMenus = [
         UIMenu(options: .displayInline, children: [
           UIAction(
-            title: "Open Player Window",
+            title: T("Open Player Window"),
             image: AmperfyImage.openPlayerWindow.asUIImage,
             attributes: isMainOrMiniPlayerPlayerOpen ? .disabled : []
           ) { _ in
             self.openMainWindow()
           },
           UIKeyCommand(
-            title: "Close Player Window",
+            title: T("Close Player Window"),
             image: AmperfyImage.xmark.asUIImage,
             action: #selector(closePlayerWindow),
             input: "W",
@@ -69,7 +69,7 @@ extension AppDelegate {
         ]),
         UIMenu(options: .displayInline, children: [
           UIAction(
-            title: "Switch Library/Mini Player",
+            title: T("Switch Library/Mini Player"),
             image: AmperfyImage.switchPlayerWindow.asUIImage
           ) { _ in
             if self.isShowingMiniPlayer {
@@ -86,7 +86,7 @@ extension AppDelegate {
       builder.insertChild(fileMenus[0], atStartOfMenu: .file)
       let openSettingsMenu = UIMenu(options: .displayInline, children: [
         UIKeyCommand(
-          title: "Settings…",
+          title: T("Settings…"),
           image: AmperfyImage.settings.asUIImage,
           action: #selector(showSettings),
           input: ",",
@@ -98,12 +98,12 @@ extension AppDelegate {
 
     // Add media controls
     builder.insertSibling(
-      UIMenu(title: "Controls", children: buildControlsMenu()),
+      UIMenu(title: T("Controls"), children: buildControlsMenu()),
       afterMenu: .view
     )
 
     builder.insertChild(UIMenu(options: .displayInline, children: [
-      UIAction(title: "Report an issue on GitHub") { _ in
+      UIAction(title: T("Report an issue on GitHub")) { _ in
         if let url = URL(string: "https://github.com/BLeeEZ/amperfy/issues") {
           UIApplication.shared.open(url)
         }
@@ -193,7 +193,7 @@ extension AppDelegate {
         attributes: []
       ),
       UIKeyCommand(
-        title: "Next Track",
+        title: T("Next Track"),
         image: .forwardMenu,
         action: #selector(keyCommandNext),
         input: UIKeyCommand.inputRightArrow,
@@ -201,7 +201,7 @@ extension AppDelegate {
         attributes: []
       ),
       UIKeyCommand(
-        title: "Previous Track",
+        title: T("Previous Track"),
         image: .backwardMenu,
         action: #selector(keyCommandPrevious),
         input: UIKeyCommand.inputLeftArrow,
@@ -209,7 +209,7 @@ extension AppDelegate {
         attributes: []
       ),
       UIKeyCommand(
-        title: "Skip Forward: " + Int(player.skipForwardInterval).description + " sec.",
+        title: T("Skip Forward: ") + Int(player.skipForwardInterval).description + " sec.",
         image: player.skipForwardIcon,
         action: #selector(keyCommandSkipForward),
         input: UIKeyCommand.inputRightArrow,
@@ -217,7 +217,7 @@ extension AppDelegate {
         attributes: isSkipAvailable ? [] : [.disabled]
       ),
       UIKeyCommand(
-        title: "Skip Backward: " + Int(player.skipBackwardInterval).description + " sec.",
+        title: T("Skip Backward: ") + Int(player.skipBackwardInterval).description + " sec.",
         image: player.skipBackwardIcon,
         action: #selector(keyCommandSkipBackward),
         input: UIKeyCommand.inputLeftArrow,
@@ -225,7 +225,7 @@ extension AppDelegate {
         attributes: isSkipAvailable ? [] : [.disabled]
       ),
       UIKeyCommand(
-        title: "Go to Current Song",
+        title: T("Go to Current Song"),
         image: .currentSongMenu,
         action: #selector(keyCommandGoToCurrent),
         input: "L",
@@ -236,7 +236,7 @@ extension AppDelegate {
 
     var section2 = [
       UIMenu(
-        title: "Playback Rate",
+        title: T("Playback Rate"),
         image: .playbackRate,
         children: PlaybackRate.allCases.map { rate in
           UIAction(
@@ -251,7 +251,7 @@ extension AppDelegate {
 
     if appDelegate.player.playerMode == .music {
       let repeatMenu = UIMenu(
-        title: "Repeat",
+        title: T("Repeat"),
         image: .repeatMenu,
         children: RepeatMode.allCases.map { mode in
           UIAction(
@@ -266,11 +266,11 @@ extension AppDelegate {
     }
     if appDelegate.player.playerMode == .music,
        appDelegate.storage.settings.user.isPlayerShuffleButtonEnabled {
-      let shuffleMenu = UIMenu(title: "Shuffle", image: .shuffleMenu, children: [
-        UIAction(title: "On", state: isShuffle ? .on : .off) { [weak self] _ in
+      let shuffleMenu = UIMenu(title: T("Shuffle"), image: .shuffleMenu, children: [
+        UIAction(title: T("On"), state: isShuffle ? .on : .off) { [weak self] _ in
           self?.keyCommandShuffleOn()
         },
-        UIAction(title: "Off", state: !isShuffle ? .on : .off) { [weak self] _ in
+        UIAction(title: T("Off"), state: !isShuffle ? .on : .off) { [weak self] _ in
           self?.keyCommandShuffleOff()
         },
       ])
@@ -285,7 +285,7 @@ extension AppDelegate {
 
     let section4 = [
       UIAction(
-        title: "Switch Music/Podcast mode",
+        title: T("Switch Music/Podcast mode"),
         image: player.playerMode == .music ? .musicalNotes : .podcast
       ) { _ in
         self.player.setPlayerMode(self.player.playerMode.nextMode)
@@ -367,8 +367,8 @@ extension AppDelegate {
         refreshCB?()
       })
       return UIMenu(
-        title: "Sleep Timer",
-        subtitle: "Pause at: \(timer.fireDate.asShortHrMinString)",
+        title: T("Sleep Timer"),
+        subtitle: T("Pause at: \(timer.fireDate.asShortHrMinString)"),
         image: .sleep,
         children: [deactivate]
       )
@@ -379,49 +379,49 @@ extension AppDelegate {
         refreshCB?()
       })
       return UIMenu(
-        title: "Sleep Timer",
-        subtitle: "Pause at end of \(player.playerMode.playableName)",
+        title: T("Sleep Timer"),
+        subtitle: T("Pause at end of \(player.playerMode.playableName)"),
         children: [deactivate]
       )
     } else {
-      let endOfTrack = UIAction(title: "End of Song or Podcast Episode", image: nil, handler: { _ in
+      let endOfTrack = UIAction(title: T("End of Song or Podcast Episode"), image: nil, handler: { _ in
         self.player.isShouldPauseAfterFinishedPlaying = true
         refreshCB?()
       })
-      let sleep5 = UIAction(title: "5 Minutes", image: nil, handler: { _ in
+      let sleep5 = UIAction(title: T("5 Minutes"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(5 * 60))
         refreshCB?()
       })
-      let sleep10 = UIAction(title: "10 Minutes", image: nil, handler: { _ in
+      let sleep10 = UIAction(title: T("10 Minutes"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(10 * 60))
         refreshCB?()
       })
-      let sleep15 = UIAction(title: "15 Minutes", image: nil, handler: { _ in
+      let sleep15 = UIAction(title: T("15 Minutes"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(15 * 60))
         refreshCB?()
       })
-      let sleep30 = UIAction(title: "30 Minutes", image: nil, handler: { _ in
+      let sleep30 = UIAction(title: T("30 Minutes"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(30 * 60))
         refreshCB?()
       })
-      let sleep45 = UIAction(title: "45 Minutes", image: nil, handler: { _ in
+      let sleep45 = UIAction(title: T("45 Minutes"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(45 * 60))
         refreshCB?()
       })
-      let sleep60 = UIAction(title: "1 Hour", image: nil, handler: { _ in
+      let sleep60 = UIAction(title: T("1 Hour"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(60 * 60))
         refreshCB?()
       })
-      let sleep120 = UIAction(title: "2 Hours", image: nil, handler: { _ in
+      let sleep120 = UIAction(title: T("2 Hours"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(2 * 60 * 60))
         refreshCB?()
       })
-      let sleep240 = UIAction(title: "4 Hours", image: nil, handler: { _ in
+      let sleep240 = UIAction(title: T("4 Hours"), image: nil, handler: { _ in
         self.activateSleepTimer(timeInterval: TimeInterval(4 * 60 * 60))
         refreshCB?()
       })
       return UIMenu(
-        title: "Sleep Timer",
+        title: T("Sleep Timer"),
         image: .sleep,
         children: [
           endOfTrack,
@@ -446,7 +446,7 @@ extension AppDelegate {
           self.appDelegate.player.pause()
           self.appDelegate.eventLogger.info(
             topic: "Sleep Timer",
-            message: "Sleep Timer paused playback."
+            message: T("Sleep Timer paused playback.")
           )
           self.appDelegate.sleepTimer?.invalidate()
           self.appDelegate.sleepTimer = nil

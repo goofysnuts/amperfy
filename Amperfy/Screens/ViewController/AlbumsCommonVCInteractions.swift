@@ -285,7 +285,7 @@ class AlbumsCommonVCInteractions {
 
   private func createSortButtonMenu() -> UIMenu {
     let sortByName = UIAction(
-      title: "Name",
+      title: T("Name"),
       image: sortType == .name ? .check : nil,
       handler: { _ in
         self.change(sortType: .name)
@@ -299,7 +299,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     let sortByRating = UIAction(
-      title: "Rating",
+      title: T("Rating"),
       image: sortType == .rating ? .check : nil,
       handler: { _ in
         self.change(sortType: .rating)
@@ -313,7 +313,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     let sortByArtist = UIAction(
-      title: "Artist",
+      title: T("Artist"),
       image: sortType == .artist ? .check : nil,
       handler: { _ in
         self.change(sortType: .artist)
@@ -327,7 +327,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     let sortByDuration = UIAction(
-      title: "Duration",
+      title: T("Duration"),
       image: sortType == .duration ? .check : nil,
       handler: { _ in
         self.change(sortType: .duration)
@@ -341,7 +341,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     let sortByYear = UIAction(
-      title: "Year",
+      title: T("Year"),
       image: sortType == .year ? .check : nil,
       handler: { _ in
         self.change(sortType: .year)
@@ -355,7 +355,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     return UIMenu(
-      title: "Sort",
+      title: T("Sort"),
       image: .sort,
       options: [],
       children: [sortByName, sortByRating, sortByArtist, sortByDuration, sortByYear]
@@ -410,7 +410,7 @@ class AlbumsCommonVCInteractions {
 
   private func createStyleButtonMenu() -> UIMenu {
     let tableStyle = UIAction(
-      title: "Table",
+      title: T("Table"),
       image: appDelegate.storage.settings.user.albumsStyleSetting == .table ? .check : nil,
       handler: { _ in
         self.appDelegate.storage.settings.user.albumsStyleSetting = .table
@@ -426,7 +426,7 @@ class AlbumsCommonVCInteractions {
       }
     )
     let gridStyle = UIAction(
-      title: "Grid",
+      title: T("Grid"),
       image: appDelegate.storage.settings.user.albumsStyleSetting == .grid ? .check : nil,
       handler: { _ in
         self.appDelegate.storage.settings.user.albumsStyleSetting = .grid
@@ -441,14 +441,14 @@ class AlbumsCommonVCInteractions {
         )
       }
     )
-    let changeGridSize = UIAction(title: "Change Grid Size", image: .resize, handler: { _ in
+    let changeGridSize = UIAction(title: T("Change Grid Size"), image: .resize, handler: { _ in
       self.showSliderMenu()
     })
     changeGridSize
       .attributes = (appDelegate.storage.settings.user.albumsStyleSetting != .grid) ? .disabled : []
 
     return UIMenu(
-      title: "Style",
+      title: T("Style"),
       image: .grid,
       options: [],
       children: [tableStyle, gridStyle, changeGridSize]
@@ -457,7 +457,7 @@ class AlbumsCommonVCInteractions {
 
   private func createActionButtonMenu() -> UIMenu {
     let action = UIAction(
-      title: "Download \(filterTitle)",
+      title: T("Download \(filterTitle)"),
       image: UIImage.startDownload,
       handler: { _ in
         var albums = [Album]()
@@ -477,15 +477,15 @@ class AlbumsCommonVCInteractions {
         let albumSongs = Array(albums.compactMap { $0.playables }.joined())
         if albumSongs.count > AppDelegate.maxPlayablesDownloadsToAddAtOnceWithoutWarning {
           let alert = UIAlertController(
-            title: "Many Songs",
-            message: "Are you sure to add \(albumSongs.count) songs from \"\(self.filterTitle)\" to download queue?",
+            title: T("Many Songs"),
+            message: T("Are you sure to add \(albumSongs.count) songs from \"\(self.filterTitle)\" to download queue?"),
             preferredStyle: .alert
           )
-          alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+          alert.addAction(UIAlertAction(title: T("OK"), style: .default, handler: { _ in
             self.appDelegate.getMeta(self.account.info).playableDownloadManager
               .download(objects: albumSongs)
           }))
-          alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+          alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel))
           self.rootVC?.present(alert, animated: true, completion: nil)
         } else {
           self.appDelegate.getMeta(self.account.info).playableDownloadManager

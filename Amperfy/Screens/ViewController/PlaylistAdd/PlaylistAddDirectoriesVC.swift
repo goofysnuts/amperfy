@@ -62,7 +62,7 @@ class PlaylistAddDirectoriesVC: MultiSourceTableViewController, PlaylistVCAddabl
     songsFetchedResultsController.delegate = self
 
     configureSearchController(
-      placeholder: "Directories and Songs",
+      placeholder: T("Directories and Songs"),
       scopeButtonTitles: ["All", "Cached"]
     )
     setNavBarTitle(title: directory.name)

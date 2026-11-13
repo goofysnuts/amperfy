@@ -93,7 +93,7 @@ class QueueVC: UIViewController {
       // Workaround for an OS bug, where the cell is suddenly rendered above the section header after reorder
       sectionView.layer.zPosition = scrollbarZPosition - 1
       contextPrevQueueSectionHeader = sectionView
-      contextPrevQueueSectionHeader?.display(name: "Previous")
+      contextPrevQueueSectionHeader?.display(name: T("Previous"))
     }
     if let sectionView = ViewCreator<UserQueueSectionHeader>
       .createFromNib(withinFixedFrame: CGRect(
@@ -106,7 +106,7 @@ class QueueVC: UIViewController {
       sectionView.backgroundColor = .clear
       sectionView.layer.zPosition = scrollbarZPosition - 1
       userQueueSectionHeader = sectionView
-      userQueueSectionHeader?.display(name: "Next from Queue", buttonPressAction: clearUserQueue)
+      userQueueSectionHeader?.display(name: T("Next from Queue"), buttonPressAction: clearUserQueue)
     }
     if let sectionView = ViewCreator<ContextQueueNextSectionHeader>
       .createFromNib(withinFixedFrame: CGRect(

@@ -117,7 +117,7 @@ class RadiosVC: SingleFetchedResultsTableViewController<RadioMO> {
   lazy var emptyContentConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .radio
-    config.text = "No Radios"
+    config.text = T("No Radios")
     config.secondaryText = "Your radios will appear here."
     return config
   }()

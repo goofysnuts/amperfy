@@ -52,10 +52,10 @@ class GenresVC: SingleFetchedResultsTableViewController<GenreMO> {
     singleFetchedResultsController = fetchedResultsController
 
     configureSearchController(
-      placeholder: "Search in \"Genres\"",
+      placeholder: T("Search in \"Genres\""),
       scopeButtonTitles: ["All", "Cached"]
     )
-    setNavBarTitle(title: "Genres")
+    setNavBarTitle(title: T("Genres"))
     tableView.register(nibName: GenericTableCell.typeName)
     tableView.reloadOnTextSizeChange { GenericTableCell.rowHeightWithoutImage }
     tableView.sectionFooterHeight = 0.0
@@ -111,7 +111,7 @@ class GenresVC: SingleFetchedResultsTableViewController<GenreMO> {
   lazy var emptyContentConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .genre
-    config.text = "No Genres"
+    config.text = T("No Genres")
     config.secondaryText = "Your genres will appear here."
     return config
   }()

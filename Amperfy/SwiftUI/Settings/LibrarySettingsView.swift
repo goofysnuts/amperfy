@@ -148,25 +148,25 @@ struct LibrarySettingsView: View {
     ZStack {
       SettingsList {
         SettingsSection(content: {
-          SettingsRow(title: "Playlists") {
+          SettingsRow(title: T("Playlists")) {
             SecondaryText(playlistCount.description)
           }
-          SettingsRow(title: "Artists") {
+          SettingsRow(title: T("Artists")) {
             SecondaryText(artistCount.description)
           }
-          SettingsRow(title: "Albums") {
+          SettingsRow(title: T("Albums")) {
             SecondaryText(albumCount.description)
           }
-          SettingsRow(title: "Songs") {
+          SettingsRow(title: T("Songs")) {
             SecondaryText(songCount.description)
           }
-          SettingsRow(title: "Podcasts") {
+          SettingsRow(title: T("Podcasts")) {
             SecondaryText(podcastCount.description)
           }
-          SettingsRow(title: "Podcast Episodes") {
+          SettingsRow(title: T("Podcast Episodes")) {
             SecondaryText(podcastEpisodeCount.description)
           }
-          SettingsRow(title: "Initial Sync") {
+          SettingsRow(title: T("Initial Sync")) {
             SecondaryText(
               appDelegate.storage.settings.accounts.getSetting(settings.activeAccountInfo).read
                 .initialSyncCompletionStatus.description
@@ -180,7 +180,7 @@ struct LibrarySettingsView: View {
           SettingsRow(title: progressTitle) {
             SecondaryText(autoSyncProgressText)
           }
-        }, header: "Background song sync")
+        }, header: T("Background song sync"))
 
         SettingsSection(content: {
           let changeHandler: ([String], [String]) -> () = { oldCacheString, newCacheString in
@@ -193,11 +193,11 @@ struct LibrarySettingsView: View {
             }
           }
 
-          SettingsRow(title: "Cached Songs") { SecondaryText(cachedSongCount.description) }
-          SettingsRow(title: "Cached Podcast Episodes") {
+          SettingsRow(title: T("Cached Songs")) { SecondaryText(cachedSongCount.description) }
+          SettingsRow(title: T("Cached Podcast Episodes")) {
             SecondaryText(cachedPodcastEpisodesCount.description)
           }
-          SettingsRow(title: "Complete Cache Size") {
+          SettingsRow(title: T("Complete Cache Size")) {
             SecondaryText(completeCacheSize.description)
           }
 
@@ -211,7 +211,7 @@ struct LibrarySettingsView: View {
             .onChange(of: cacheSelection, changeHandler)
           #else
             NavigationLink(value: Destination.cacheSizeLimit) {
-              SettingsRow(title: "Cache Size Limit") {
+              SettingsRow(title: T("Cache Size Limit")) {
                 SecondaryText(cacheSizeLimit.description)
               }
             }
@@ -219,16 +219,16 @@ struct LibrarySettingsView: View {
           #endif
 
           if let activeAccountInfo = settings.activeAccountInfo {
-            SettingsButtonRow(title: "Download all songs in library") {
+            SettingsButtonRow(title: T("Download all songs in library")) {
               isShowDownloadSongsAlert = true
             }
             .alert(isPresented: $isShowDownloadSongsAlert) {
               Alert(
-                title: Text("Download all songs in library"),
+                title: Text(T("Download all songs in library")),
                 message: Text(
                   "This will add all uncached songs in your library to the download queue. This may use a lot of data and storage. Continue?"
                 ),
-                primaryButton: .default(Text("OK")) {
+                primaryButton: .default(Text(T("OK"))) {
                   let account = appDelegate.storage.main.library
                     .getAccount(info: activeAccountInfo)
                   let allSongsToDownload = appDelegate.storage.main.library
@@ -245,17 +245,17 @@ struct LibrarySettingsView: View {
             }
 
             SettingsButtonRow(
-              title: "Delete downloaded songs and podcast episodes",
+              title: T("Delete downloaded songs and podcast episodes"),
               actionType: .destructive
             ) {
               isShowDeleteCacheAlert = true
             }.alert(isPresented: $isShowDeleteCacheAlert) {
               Alert(
-                title: Text("Delete Cache"),
+                title: Text(T("Delete Cache")),
                 message: Text(
                   "Are you sure you want to delete this account’s downloaded songs and podcast episodes?"
                 ),
-                primaryButton: .destructive(Text("Delete")) {
+                primaryButton: .destructive(Text(T("Delete"))) {
                   appDelegate.player.stop()
                   let account = appDelegate.storage.main.library
                     .getAccount(info: activeAccountInfo)
@@ -269,10 +269,10 @@ struct LibrarySettingsView: View {
               )
             }
           }
-        }, header: "Cache")
+        }, header: T("Cache"))
       }
     }
-    .navigationTitle("Library")
+    .navigationTitle(T("Library"))
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(for: Destination.self) { destination in
       switch destination {
@@ -281,7 +281,7 @@ struct LibrarySettingsView: View {
           data: [("Size", byteValues), (" Bytes", [" MB", " GB"])],
           selection: $cacheSelection
         )
-        .navigationTitle("Cache Size Limit")
+        .navigationTitle(T("Cache Size Limit"))
       }
     }
     .onAppear {

@@ -78,7 +78,7 @@ class GenreDetailVC: MultiSourceTableViewController {
     tableView.estimatedSectionFooterHeight = 0.0
 
     configureSearchController(
-      placeholder: "Artists, Albums and Songs",
+      placeholder: T("Artists, Albums and Songs"),
       scopeButtonTitles: ["All", "Cached"]
     )
     setNavBarTitle(title: genre.name)
@@ -269,11 +269,11 @@ class GenreDetailVC: MultiSourceTableViewController {
     -> String? {
     switch section + 0 {
     case LibraryElement.Artist.rawValue:
-      return "Artists"
+      return T("Artists")
     case LibraryElement.Album.rawValue:
-      return "Albums"
+      return T("Albums")
     case LibraryElement.Song.rawValue:
-      return "Songs"
+      return T("Songs")
     default:
       return ""
     }

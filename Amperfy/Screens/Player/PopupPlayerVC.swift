@@ -121,7 +121,7 @@ class PopupPlayerVC: UIViewController, UIScrollViewDelegate {
         height: ContextQueuePrevSectionHeader.frameHeight
       )) {
       contextPrevQueueSectionHeader = sectionView
-      contextPrevQueueSectionHeader?.display(name: "Previous")
+      contextPrevQueueSectionHeader?.display(name: T("Previous"))
     }
     if let sectionView = ViewCreator<UserQueueSectionHeader>.createFromNib(withinFixedFrame: CGRect(
       x: 0,
@@ -130,7 +130,7 @@ class PopupPlayerVC: UIViewController, UIScrollViewDelegate {
       height: UserQueueSectionHeader.frameHeight
     )) {
       userQueueSectionHeader = sectionView
-      userQueueSectionHeader?.display(name: "Next from Queue", buttonPressAction: clearUserQueue)
+      userQueueSectionHeader?.display(name: T("Next from Queue"), buttonPressAction: clearUserQueue)
     }
     if let sectionView = ViewCreator<ContextQueueNextSectionHeader>
       .createFromNib(withinFixedFrame: CGRect(

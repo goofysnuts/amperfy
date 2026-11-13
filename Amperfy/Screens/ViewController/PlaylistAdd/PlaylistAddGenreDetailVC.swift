@@ -78,7 +78,7 @@ class PlaylistAddGenreDetailVC: MultiSourceTableViewController, PlaylistVCAddabl
     tableView.estimatedSectionFooterHeight = 0.0
 
     configureSearchController(
-      placeholder: "Artists, Albums and Songs",
+      placeholder: T("Artists, Albums and Songs"),
       scopeButtonTitles: ["All", "Cached"]
     )
   }
@@ -143,11 +143,11 @@ class PlaylistAddGenreDetailVC: MultiSourceTableViewController, PlaylistVCAddabl
     -> String? {
     switch section + 1 {
     case LibraryElement.Artist.rawValue:
-      return "Artists"
+      return T("Artists")
     case LibraryElement.Album.rawValue:
-      return "Albums"
+      return T("Albums")
     case LibraryElement.Song.rawValue:
-      return "Songs"
+      return T("Songs")
     default:
       return ""
     }

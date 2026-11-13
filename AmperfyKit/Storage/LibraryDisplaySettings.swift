@@ -55,37 +55,37 @@ public enum LibraryDisplayType: Int, CaseIterable, Sendable {
   public var displayName: String {
     switch self {
     case .artists:
-      return "Artists"
+      return T("Artists")
     case .albums:
-      return "Albums"
+      return T("Albums")
     case .songs:
-      return "Songs"
+      return T("Songs")
     case .genres:
-      return "Genres"
+      return T("Genres")
     case .directories:
-      return "Directories"
+      return T("Directories")
     case .playlists:
-      return "Playlists"
+      return T("Playlists")
     case .podcasts:
-      return "Podcasts"
+      return T("Podcasts")
     case .downloads:
-      return "Downloads"
+      return T("Downloads")
     case .favoriteSongs:
-      return "Favorite Songs"
+      return T("Favorite Songs")
     case .favoriteAlbums:
-      return "Favorite Albums"
+      return T("Favorite Albums")
     case .favoriteArtists:
-      return "Favorite Artists"
+      return T("Favorite Artists")
     case .newestAlbums:
-      return "Newest Albums"
+      return T("Newest Albums")
     case .recentAlbums:
-      return "Recently Played Albums"
+      return T("Recently Played Albums")
     case .radios:
-      return "Radios"
+      return T("Radios")
     case .spotifyPlaylists:
-      return "Spotify-Mixes"
+      return T("Spotify-Mixes")
     case .ownMixes:
-      return "Deine Mixes"
+      return T("Deine Mixes")
     }
   }
 

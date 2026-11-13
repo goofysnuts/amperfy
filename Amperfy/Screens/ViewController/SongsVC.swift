@@ -59,7 +59,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
 
     applyFilter()
     configureSearchController(
-      placeholder: "Search in \"\(filterTitle)\"",
+      placeholder: T("Search in \"\(filterTitle)\""),
       scopeButtonTitles: ["All", "Cached"]
     )
     tableView.register(nibName: PlayableTableCell.typeName)
@@ -130,7 +130,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
   lazy var emptyContentConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .musicalNotes
-    config.text = "No Songs"
+    config.text = T("No Songs")
     config.secondaryText = "Your songs will appear here."
     return config
   }()
@@ -271,7 +271,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
          sectionNameInitial != SectionIndexType.noRatingIndexSymbol {
         return "\(sectionNameInitial) Star\(sectionNameInitial != "1" ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .addedDate:
       return nil
@@ -380,7 +380,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
 
   private func createSortButtonMenu() -> UIMenu {
     let sortByName = UIAction(
-      title: "Name",
+      title: T("Name"),
       image: sortType == .name ? .check : nil,
       handler: { _ in
         self.change(sortType: .name)
@@ -394,7 +394,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
       }
     )
     let sortByRating = UIAction(
-      title: "Rating",
+      title: T("Rating"),
       image: sortType == .rating ? .check : nil,
       handler: { _ in
         self.change(sortType: .rating)
@@ -408,7 +408,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
       }
     )
     let sortByDuration = UIAction(
-      title: "Duration",
+      title: T("Duration"),
       image: sortType == .duration ? .check : nil,
       handler: { _ in
         self.change(sortType: .duration)
@@ -422,7 +422,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
       }
     )
     let sortByStarredDate = UIAction(
-      title: "Starred date",
+      title: T("Starred date"),
       image: sortType == .starredDate ? .check : nil,
       handler: { _ in
         self.change(sortType: .starredDate)
@@ -436,7 +436,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
       }
     )
     let sortByAddedDate = UIAction(
-      title: "Date Added",
+      title: T("Date Added"),
       image: sortType == .addedDate ? .check : nil,
       handler: { _ in
         self.change(sortType: .addedDate)
@@ -451,21 +451,21 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
     )
     if displayFilter == .favorites, account.apiType.asServerApiType != .ampache {
       return UIMenu(
-        title: "Sort",
+        title: T("Sort"),
         image: .sort,
         options: [],
         children: [sortByName, sortByRating, sortByDuration, sortByStarredDate, sortByAddedDate]
       )
     } else if account.apiType.asServerApiType != .ampache {
       return UIMenu(
-        title: "Sort",
+        title: T("Sort"),
         image: .sort,
         options: [],
         children: [sortByName, sortByRating, sortByDuration, sortByAddedDate]
       )
     } else {
       return UIMenu(
-        title: "Sort",
+        title: T("Sort"),
         image: .sort,
         options: [],
         children: [sortByName, sortByRating, sortByDuration]
@@ -475,7 +475,7 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
 
   private func createActionButtonMenu() -> UIMenu {
     let action = UIAction(
-      title: "Download \(filterTitle)",
+      title: T("Download \(filterTitle)"),
       image: UIImage.startDownload,
       handler: { _ in
         var songs = [Song]()
@@ -490,15 +490,15 @@ class SongsVC: SingleFetchedResultsTableViewController<SongMO> {
         }
         if songs.count > AppDelegate.maxPlayablesDownloadsToAddAtOnceWithoutWarning {
           let alert = UIAlertController(
-            title: "Many Songs",
-            message: "Are you sure to add \(songs.count) songs from \"\(self.filterTitle)\" to download queue?",
+            title: T("Many Songs"),
+            message: T("Are you sure to add \(songs.count) songs from \"\(self.filterTitle)\" to download queue?"),
             preferredStyle: .alert
           )
-          alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+          alert.addAction(UIAlertAction(title: T("OK"), style: .default, handler: { _ in
             self.appDelegate.getMeta(self.account.info).playableDownloadManager
               .download(objects: songs)
           }))
-          alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+          alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel))
           self.present(alert, animated: true, completion: nil)
         } else {
           self.appDelegate.getMeta(self.account.info).playableDownloadManager

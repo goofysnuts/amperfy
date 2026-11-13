@@ -256,6 +256,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   )
     -> Bool {
+    BBNibTranslator.install()
     if let options = launchOptions {
       os_log("application launch with options:", log: self.log, type: .info)
       options

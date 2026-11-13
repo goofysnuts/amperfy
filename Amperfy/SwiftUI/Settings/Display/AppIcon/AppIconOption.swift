@@ -6,6 +6,7 @@
 //  Copyright © 2026 Maximilian Bauer. All rights reserved.
 //
 import Foundation
+import AmperfyKit
 
 struct AppIconOption: Identifiable {
   let title: String
@@ -17,49 +18,49 @@ struct AppIconOption: Identifiable {
 
   static let all: [AppIconOption] = [
     AppIconOption(
-      title: "Default",
+      title: T("Default"),
       iconName: nil,
       previewName: "AmperfyAppIconPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Teal",
+      title: T("Teal"),
       iconName: "AmperfyTeal",
       previewName: "AmperfyTealPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Green",
+      title: T("Green"),
       iconName: "AmperfyGreen",
       previewName: "AmperfyGreenPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Yellow",
+      title: T("Yellow"),
       iconName: "AmperfyYellow",
       previewName: "AmperfyYellowPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Orange",
+      title: T("Orange"),
       iconName: "AmperfyOrange",
       previewName: "AmperfyOrangePreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Red",
+      title: T("Red"),
       iconName: "AmperfyRed",
       previewName: "AmperfyRedPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Pink",
+      title: T("Pink"),
       iconName: "AmperfyPink",
       previewName: "AmperfyPinkPreview",
       category: .amperfy
     ),
     AppIconOption(
-      title: "Purple",
+      title: T("Purple"),
       iconName: "AmperfyPurple",
       previewName: "AmperfyPurplePreview",
       category: .amperfy

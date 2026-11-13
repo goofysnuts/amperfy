@@ -92,7 +92,7 @@ class TabBarVC: UITabBarController {
       }
 
     libraryGroup = UITabGroup(
-      title: "Library",
+      title: T("Library"),
       image: .musicLibrary,
       identifier: "Tabs.Library",
       children: libraryTabs
@@ -106,7 +106,7 @@ class TabBarVC: UITabBarController {
     // FireSonic: tab bar like Apple Music – Home, Library, Playlists, Settings and the
     // separate search button (UISearchTab is placed at the trailing end by the system)
     playlistsTab = UITab(
-      title: "Playlists",
+      title: T("Playlists"),
       image: .playlist,
       identifier: "Tabs.FireSonic.Playlists"
     ) { _ in
@@ -117,7 +117,7 @@ class TabBarVC: UITabBarController {
     fixTabs.append(playlistsTab!)
 
     settingsTab = UITab(
-      title: "Settings",
+      title: T("Settings"),
       image: .settings,
       identifier: "Tabs.FireSonic.Settings"
     ) { _ in
@@ -173,7 +173,7 @@ class TabBarVC: UITabBarController {
     )
 
     if appDelegate.storage.settings.user.isOfflineMode {
-      appDelegate.eventLogger.info(topic: "Reminder", message: "Offline Mode is active.")
+      appDelegate.eventLogger.info(topic: "Reminder", message: T("Offline Mode is active."))
     }
   }
 
@@ -589,7 +589,7 @@ final class FireTVRemoteVC: UIViewController {
     var deviceConfig = UIButton.Configuration.gray()
     deviceConfig.image = UIImage(systemName: "tv")
     deviceConfig.imagePadding = 8
-    deviceConfig.title = "FireTV suchen …"
+    deviceConfig.title = T("FireTV suchen …")
     deviceConfig.cornerStyle = .capsule
     deviceButton.configuration = deviceConfig
     deviceButton.showsMenuAsPrimaryAction = true
@@ -621,15 +621,15 @@ final class FireTVRemoteVC: UIViewController {
     }
     remainingLabel.textAlignment = .right
 
-    symbolButton(prevButton, "backward.fill", size: 28, label: "Zurück")
-    symbolButton(playButton, "play.fill", size: 40, label: "Wiedergabe")
-    symbolButton(nextButton, "forward.fill", size: 28, label: "Weiter")
+    symbolButton(prevButton, "backward.fill", size: 28, label: T("Zurück"))
+    symbolButton(playButton, "play.fill", size: 40, label: T("Wiedergabe"))
+    symbolButton(nextButton, "forward.fill", size: 28, label: T("Weiter"))
     prevButton.addAction(UIAction { [weak self] _ in self?.send("previous") }, for: .touchUpInside)
     playButton.addAction(UIAction { [weak self] _ in self?.send("toggle") }, for: .touchUpInside)
     nextButton.addAction(UIAction { [weak self] _ in self?.send("next") }, for: .touchUpInside)
 
     var transferConfig = UIButton.Configuration.filled()
-    transferConfig.title = "iPhone-Wiedergabe auf FireTV übertragen"
+    transferConfig.title = T("iPhone-Wiedergabe auf FireTV übertragen")
     transferConfig.image = UIImage(systemName: "arrow.up.right.square")
     transferConfig.imagePadding = 8
     transferConfig.cornerStyle = .capsule
@@ -641,7 +641,7 @@ final class FireTVRemoteVC: UIViewController {
     hintLabel.textColor = .secondaryLabel
     hintLabel.numberOfLines = 0
     hintLabel.textAlignment = .center
-    hintLabel.text = "Der FireTV muss an sein (FireLauncher) oder Blackbox geöffnet (gleiches WLAN)."
+    hintLabel.text = T("Der FireTV muss an sein (FireLauncher) oder Blackbox geöffnet (gleiches WLAN).")
 
     let timeRow = UIStackView(arrangedSubviews: [elapsedLabel, remainingLabel])
     timeRow.distribution = .fillEqually
@@ -688,16 +688,16 @@ final class FireTVRemoteVC: UIViewController {
         self?.select(device: device)
       }
     }
-    actions.append(UIAction(title: "IP-Adresse eingeben …", image: UIImage(systemName: "keyboard")) { [weak self] _ in
+    actions.append(UIAction(title: T("IP-Adresse eingeben …"), image: UIImage(systemName: "keyboard")) { [weak self] _ in
       self?.askForHost()
     })
-    deviceButton.menu = UIMenu(title: "FireTV wählen", children: actions)
+    deviceButton.menu = UIMenu(title: T("FireTV wählen"), children: actions)
   }
 
   private func select(device: FireTVBrowser.Device) {
     Task { @MainActor in
       guard let host = await FireTVBrowser.resolve(device.endpoint) else {
-        appDelegateRef.eventLogger.info(topic: "FireTV", message: "„\(device.name)“ ist nicht erreichbar.")
+        appDelegateRef.eventLogger.info(topic: "FireTV", message: T("„\(device.name)“ ist nicht erreichbar."))
         return
       }
       connect(host: host, name: device.name)
@@ -706,16 +706,16 @@ final class FireTVRemoteVC: UIViewController {
 
   private func askForHost() {
     let alert = UIAlertController(
-      title: "FireTV-Adresse",
-      message: "IP-Adresse des FireTV, z. B. 192.168.30.21",
+      title: T("FireTV-Adresse"),
+      message: T("IP-Adresse des FireTV, z. B. 192.168.30.21"),
       preferredStyle: .alert
     )
     alert.addTextField {
       $0.keyboardType = .numbersAndPunctuation
       $0.text = FireTVClient.savedHost
     }
-    alert.addAction(UIAlertAction(title: "Abbrechen", style: .cancel))
-    alert.addAction(UIAlertAction(title: "Verbinden", style: .default) { [weak self, weak alert] _ in
+    alert.addAction(UIAlertAction(title: T("Abbrechen"), style: .cancel))
+    alert.addAction(UIAlertAction(title: T("Verbinden"), style: .default) { [weak self, weak alert] _ in
       guard let text = alert?.textFields?.first?.text, !text.isEmpty else { return }
       self?.connect(host: text, name: nil)
     })
@@ -750,10 +750,10 @@ final class FireTVRemoteVC: UIViewController {
     guard let client else { return }
     do {
       status = try await client.status()
-      hintLabel.text = "Verbunden"
+      hintLabel.text = T("Verbunden")
     } catch {
       status = nil
-      hintLabel.text = "FireTV nicht erreichbar – ist er an und im selben WLAN?"
+      hintLabel.text = T("FireTV nicht erreichbar – ist er an und im selben WLAN?")
     }
     render()
   }
@@ -830,10 +830,10 @@ final class FireTVRemoteVC: UIViewController {
       do {
         try await client.playQueue(songIds: ids, index: index, position: position)
         player.pause()
-        appDelegateRef.eventLogger.info(topic: "FireTV", message: "Wiedergabe läuft jetzt auf dem FireTV.")
+        appDelegateRef.eventLogger.info(topic: "FireTV", message: T("Wiedergabe läuft jetzt auf dem FireTV."))
         await refresh()
       } catch {
-        appDelegateRef.eventLogger.info(topic: "FireTV", message: "Übertragung fehlgeschlagen.")
+        appDelegateRef.eventLogger.info(topic: "FireTV", message: T("Übertragung fehlgeschlagen."))
       }
     }
   }
@@ -926,7 +926,7 @@ final class RemoteSession: PlayerRemoteRedirect {
       do {
         try await client.playQueue(songIds: ids, index: min(index, ids.count - 1), position: 0, shuffle: shuffle)
       } catch {
-        appDelegateRef.eventLogger.info(topic: "FireTV", message: "Wiedergabe auf dem FireTV fehlgeschlagen.")
+        appDelegateRef.eventLogger.info(topic: "FireTV", message: T("Wiedergabe auf dem FireTV fehlgeschlagen."))
       }
       await refresh()
     }
@@ -1083,14 +1083,14 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
     playConfig.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
     playConfig.baseForegroundColor = .label
     playButton.configuration = playConfig
-    playButton.accessibilityLabel = "Wiedergabe"
+    playButton.accessibilityLabel = T("Wiedergabe")
     playButton.addAction(UIAction { [weak self] _ in self?.appDelegateRef.player.togglePlayPause() }, for: .touchUpInside)
 
     var nextConfig = UIButton.Configuration.plain()
     nextConfig.image = UIImage(systemName: "forward.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
     nextConfig.baseForegroundColor = .label
     nextButton.configuration = nextConfig
-    nextButton.accessibilityLabel = "Weiter"
+    nextButton.accessibilityLabel = T("Weiter")
     nextButton.addAction(UIAction { [weak self] _ in self?.appDelegateRef.player.playNext() }, for: .touchUpInside)
 
     ringHost.isUserInteractionEnabled = false
@@ -1298,11 +1298,11 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     titleLabel.isUserInteractionEnabled = true
     titleLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAlbum)))
     titleLabel.accessibilityTraits.insert(.button)
-    titleLabel.accessibilityHint = "Öffnet das Album"
+    titleLabel.accessibilityHint = T("Öffnet das Album")
     artistLabel.isUserInteractionEnabled = true
     artistLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openArtist)))
     artistLabel.accessibilityTraits.insert(.button)
-    artistLabel.accessibilityHint = "Öffnet den Interpreten"
+    artistLabel.accessibilityHint = T("Öffnet den Interpreten")
     refresh()
   }
 
@@ -1380,10 +1380,10 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     artistLabel.textColor = UIColor.white.withAlphaComponent(0.8)
     artistLabel.textAlignment = .center
 
-    symbol(favoriteButton, "heart", size: 22, weight: .regular, label: "Favorit")
+    symbol(favoriteButton, "heart", size: 22, weight: .regular, label: T("Favorit"))
     favoriteButton.addAction(UIAction { [weak self] _ in self?.toggleFavorite() }, for: .touchUpInside)
     ratingView.delegate = self
-    symbol(optionsButton, "ellipsis", size: 20, label: "Mehr")
+    symbol(optionsButton, "ellipsis", size: 20, label: T("Mehr"))
     optionsButton.showsMenuAsPrimaryAction = true
 
     slider.minimumTrackTintColor = .white
@@ -1399,9 +1399,9 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     audioInfoLabel.textAlignment = .center
     remainingLabel.textAlignment = .right
 
-    symbol(prevButton, "backward.fill", size: 30, label: "Zurück")
-    symbol(playButton, "play.fill", size: 44, label: "Wiedergabe")
-    symbol(nextButton, "forward.fill", size: 30, label: "Weiter")
+    symbol(prevButton, "backward.fill", size: 30, label: T("Zurück"))
+    symbol(playButton, "play.fill", size: 44, label: T("Wiedergabe"))
+    symbol(nextButton, "forward.fill", size: 30, label: T("Weiter"))
     prevButton.addAction(UIAction { [weak self] _ in self?.player.playPreviousOrReplay() }, for: .touchUpInside)
     playButton.addAction(UIAction { [weak self] _ in self?.player.togglePlayPause() }, for: .touchUpInside)
     nextButton.addAction(UIAction { [weak self] _ in self?.player.playNext() }, for: .touchUpInside)
@@ -1411,20 +1411,20 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
       self.player.setRepeatMode(self.player.repeatMode.nextMode)
     }, for: .touchUpInside)
 
-    symbol(devicesButton, "airplayaudio", size: 20, label: "Wiedergabegerät")
+    symbol(devicesButton, "airplayaudio", size: 20, label: T("Wiedergabegerät"))
     devicesButton.addAction(UIAction { [weak self] _ in self?.showDevices() }, for: .touchUpInside)
-    symbol(settingsButton, "gearshape.fill", size: 20, label: "Schnelleinstellungen")
+    symbol(settingsButton, "gearshape.fill", size: 20, label: T("Schnelleinstellungen"))
     settingsButton.addAction(UIAction { [weak self] _ in self?.showQuickSettings() }, for: .touchUpInside)
-    symbol(closeButton, "chevron.down", size: 22, label: "Schließen")
+    symbol(closeButton, "chevron.down", size: 22, label: T("Schließen"))
     closeButton.addAction(UIAction { [weak self] _ in self?.close() }, for: .touchUpInside)
-    symbol(lyricsButton, "quote.bubble", size: 20, label: "Songtext")
+    symbol(lyricsButton, "quote.bubble", size: 20, label: T("Songtext"))
     lyricsButton.addAction(UIAction { [weak self] _ in self?.showSheet(LyricsVC()) }, for: .touchUpInside)
-    symbol(queueButton, "list.bullet", size: 20, label: "Wiedergabeliste")
+    symbol(queueButton, "list.bullet", size: 20, label: T("Wiedergabeliste"))
     queueButton.addAction(UIAction { [weak self] _ in
       guard let self else { return }
       self.showSheet(RemoteSession.shared.isRemoteActive ? RemoteQueueVC() : QueueVC())
     }, for: .touchUpInside)
-    symbol(sleepButton, "moon.zzz", size: 20, label: "Schlaftimer")
+    symbol(sleepButton, "moon.zzz", size: 20, label: T("Schlaftimer"))
     sleepButton.showsMenuAsPrimaryAction = true
     sleepButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
       guard let self else { completion([]); return }
@@ -1520,9 +1520,9 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
     if key != renderedKey {
       renderedKey = key
       symbol(playButton, np.isPlaying ? "pause.fill" : "play.fill", size: 44, label: np.isPlaying ? "Pause" : "Wiedergabe")
-      symbol(shuffleButton, "shuffle", size: 17, label: "Zufall", filled: np.isShuffle)
+      symbol(shuffleButton, "shuffle", size: 17, label: T("Zufall"), filled: np.isShuffle)
       let repeatName = np.repeatMode == .single ? "repeat.1" : "repeat"
-      symbol(repeatButton, repeatName, size: 17, label: "Wiederholen", filled: np.repeatMode != .off)
+      symbol(repeatButton, repeatName, size: 17, label: T("Wiederholen"), filled: np.repeatMode != .off)
       var dc = UIButton.Configuration.plain()
       dc.image = UIImage(
         systemName: np.isRemote ? "tv.fill" : "airplayaudio",
@@ -1665,7 +1665,7 @@ final class BlackboxPlayerVC: UIViewController, MusicPlayable, RatingViewDelegat
 
   private func showQuickSettings() {
     let host = UIHostingController(rootView: BlackboxQuickSettingsView())
-    host.title = "Schnelleinstellungen"
+    host.title = T("Schnelleinstellungen")
     showSheet(host)
   }
 
@@ -1717,7 +1717,7 @@ final class DevicePickerVC: UITableViewController {
   override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
     switch section {
     case 0: return nil
-    case 1: return "Blackbox im Netzwerk"
+    case 1: return T("Blackbox im Netzwerk")
     default: return "AirPlay & Bluetooth"
     }
   }
@@ -1757,14 +1757,14 @@ final class DevicePickerVC: UITableViewController {
           cell.accessoryView = spinner
         }
       } else {
-        content.text = "IP-Adresse eingeben …"
+        content.text = T("IP-Adresse eingeben …")
         content.image = UIImage(systemName: "keyboard")
         if session.isRemoteActive, !devices.contains(where: { $0.name == session.deviceName }) {
           content.secondaryText = "Verbunden: \(session.deviceName ?? "")"
         }
       }
     default:
-      content.text = "AirPlay- oder Bluetooth-Gerät wählen"
+      content.text = T("AirPlay- oder Bluetooth-Gerät wählen")
       let picker = AVRoutePickerView(frame: CGRect(x: 0, y: 0, width: 36, height: 36))
       picker.tintColor = view.tintColor
       cell.accessoryView = picker
@@ -1804,14 +1804,14 @@ final class DevicePickerVC: UITableViewController {
   }
 
   private func askForHost() {
-    let alert = UIAlertController(title: "FireTV-Adresse", message: "Steht auf dem FireTV in Blackbox unter Einstellungen.", preferredStyle: .alert)
+    let alert = UIAlertController(title: T("FireTV-Adresse"), message: T("Steht auf dem FireTV in Blackbox unter Einstellungen."), preferredStyle: .alert)
     alert.addTextField {
       $0.keyboardType = .numbersAndPunctuation
       $0.text = FireTVClient.savedHost
       $0.placeholder = "192.168.30.21"
     }
-    alert.addAction(UIAlertAction(title: "Abbrechen", style: .cancel))
-    alert.addAction(UIAlertAction(title: "Verbinden", style: .default) { [weak self, weak alert] _ in
+    alert.addAction(UIAlertAction(title: T("Abbrechen"), style: .cancel))
+    alert.addAction(UIAlertAction(title: T("Verbinden"), style: .default) { [weak self, weak alert] _ in
       guard let text = alert?.textFields?.first?.text, !text.isEmpty else { return }
       RemoteSession.shared.connect(host: text, name: nil)
       self?.tableView.reloadData()
@@ -1854,42 +1854,42 @@ struct BlackboxQuickSettingsView: View {
   var body: some View {
     Form {
       Section {
-        Toggle("Scrobbeln", isOn: $scrobble)
+        Toggle(T("Scrobbeln"), isOn: $scrobble)
           .onChange(of: scrobble) { _, v in
             guard let active = delegate.storage.settings.accounts.active else { return }
             delegate.storage.settings.accounts.updateSetting(active) { $0.isScrobbleStreamedItems = v }
           }
       } footer: {
-        Text("Gestreamte Titel an den Server melden (Wiedergabezähler, Rückblicke).")
+        Text(T("Gestreamte Titel an den Server melden (Wiedergabezähler, Rückblicke)."))
       }
       Section {
         Toggle("ReplayGain", isOn: $replayGain)
           .onChange(of: replayGain) { _, v in delegate.storage.settings.user.isReplayGainEnabled = v }
       } footer: {
-        Text("Lautstärke anhand der Metadaten angleichen.")
+        Text(T("Lautstärke anhand der Metadaten angleichen."))
       }
       Section {
-        Toggle("Fortlaufende Wiedergabe", isOn: $autoplay)
+        Toggle(T("Fortlaufende Wiedergabe"), isOn: $autoplay)
           .onChange(of: autoplay) { _, v in delegate.storage.settings.user.isAutoplayEnabled = v }
       } footer: {
-        Text("Wenn die Warteschlange endet, laufen ähnliche Titel weiter (Radio).")
+        Text(T("Wenn die Warteschlange endet, laufen ähnliche Titel weiter (Radio)."))
       }
       Section {
-        Toggle("Wiedergabeliste geräteübergreifend synchronisieren", isOn: $syncQueue)
+        Toggle(T("Wiedergabeliste geräteübergreifend synchronisieren"), isOn: $syncQueue)
           .onChange(of: syncQueue) { _, v in PlayQueueSync.isEnabled = v }
-        Button("Wiedergabe von anderem Gerät fortsetzen") {
+        Button(T("Wiedergabe von anderem Gerät fortsetzen")) {
           Task { @MainActor in resumeMessage = await PlayQueueSync.resume() }
         }
         if let resumeMessage { Text(resumeMessage).font(.footnote).foregroundStyle(.secondary) }
       } footer: {
-        Text("Speichert Warteschlange und Position auf dem Server (auch der FireTV nutzt das), damit du auf einem anderen Gerät weiterhören kannst.")
+        Text(T("Speichert Warteschlange und Position auf dem Server (auch der FireTV nutzt das), damit du auf einem anderen Gerät weiterhören kannst."))
       }
       Section("Transcoding") {
-        Picker("WLAN", selection: $wifi) {
+        Picker(T("WLAN"), selection: $wifi) {
           ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { Text($0.description).tag($0) }
         }
         .onChange(of: wifi) { _, _ in applyBitrates() }
-        Picker("Mobilfunk", selection: $cellular) {
+        Picker(T("Mobilfunk"), selection: $cellular) {
           ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { Text($0.description).tag($0) }
         }
         .onChange(of: cellular) { _, _ in applyBitrates() }
@@ -1951,10 +1951,10 @@ final class PlayQueueSync: MusicPlayable {
   /// Loads the queue saved by another device and plays it here (or on the connected FireTV).
   static func resume() async -> String {
     let delegate = UIApplication.shared.delegate as! AppDelegate
-    guard let info = delegate.storage.settings.accounts.active else { return "Kein Konto aktiv." }
+    guard let info = delegate.storage.settings.accounts.active else { return T("Kein Konto aktiv.") }
     let api = delegate.getMeta(info).backendApi
     guard let url = try? await api.generateUrl(forAction: "getPlayQueue", query: [URLQueryItem(name: "f", value: "json")]) else {
-      return "Vom Server nicht unterstützt."
+      return T("Vom Server nicht unterstützt.")
     }
     var req = URLRequest(url: url)
     for (k, v) in api.httpHeaders { req.setValue(v, forHTTPHeaderField: k) }
@@ -1963,12 +1963,12 @@ final class PlayQueueSync: MusicPlayable {
           let response = json["subsonic-response"] as? [String: Any],
           let queue = response["playQueue"] as? [String: Any],
           let entries = queue["entry"] as? [[String: Any]], !entries.isEmpty
-    else { return "Keine gespeicherte Wiedergabeliste gefunden." }
+    else { return T("Keine gespeicherte Wiedergabeliste gefunden.") }
     let account = delegate.storage.main.library.getAccount(info: info)
     let songs = entries.compactMap { $0["id"] as? String }.compactMap {
       delegate.storage.main.library.getSong(for: account, id: $0)
     }
-    guard !songs.isEmpty else { return "Die Titel sind in der Mediathek noch nicht synchronisiert." }
+    guard !songs.isEmpty else { return T("Die Titel sind in der Mediathek noch nicht synchronisiert.") }
     let current = queue["current"].map { "\($0)" }
     let index = songs.firstIndex(where: { $0.id == current }) ?? 0
     let position = (queue["position"] as? Double ?? Double(queue["position"] as? Int ?? 0)) / 1000
@@ -1978,7 +1978,7 @@ final class PlayQueueSync: MusicPlayable {
       delegate.player.seek(toSecond: position)
     }
     let by = (queue["changedBy"] as? String).map { " (von \($0))" } ?? ""
-    return "Fortgesetzt: \(songs[index].title)\(by)"
+    return T("Fortgesetzt: \(songs[index].title)\(by)")
   }
 
   func didStartPlayingFromBeginning() { save(force: true) }
@@ -2154,5 +2154,80 @@ final class RemoteQueueVC: UITableViewController {
   override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
     RemoteSession.shared.remoteCommand("jump", value: Double(entries[indexPath.row].index))
+  }
+}
+
+// MARK: - Blackbox: Übersetzung der Texte aus Storyboards/XIBs
+
+@MainActor
+enum BBNibTranslator {
+  /// Texte, die direkt in Storyboards/XIBs stehen
+  static let nibTexts: Set<String> = [
+    "Syncing", "Info", "Login", "Skip >", "Updating", "Description", "Artist", "Clear",
+    "Next from:", "Play", "Shuffle", "New playlist name", "Create",
+  ]
+
+  private static var installed = false
+
+  static func install() {
+    guard !installed, BBLocale.isGerman else { return }
+    installed = true
+    swap(UIViewController.self, #selector(UIViewController.viewWillAppear(_:)), #selector(UIViewController.bb_viewWillAppear(_:)))
+    swap(UIView.self, #selector(UIView.awakeFromNib), #selector(UIView.bb_viewAwakeFromNib))
+  }
+
+  private static func swap(_ cls: AnyClass, _ original: Selector, _ replacement: Selector) {
+    guard let o = class_getInstanceMethod(cls, original),
+          let r = class_getInstanceMethod(cls, replacement) else { return }
+    if class_addMethod(cls, original, method_getImplementation(r), method_getTypeEncoding(r)) {
+      class_replaceMethod(cls, replacement, method_getImplementation(o), method_getTypeEncoding(o))
+    } else {
+      method_exchangeImplementations(o, r)
+    }
+  }
+
+  static func tr(_ text: String?) -> String? {
+    guard let text, nibTexts.contains(text) else { return nil }
+    let t = TV(text)
+    return t == text ? nil : t
+  }
+
+  /// nur das Element selbst – jedes aus einer XIB geladene Element wird einzeln geweckt
+  static func translate(_ view: UIView) {
+    if let label = view as? UILabel, let t = tr(label.text) {
+      label.text = t
+    } else if let button = view as? UIButton {
+      if let t = tr(button.configuration?.title) {
+        button.configuration?.title = t
+      } else if let t = tr(button.title(for: .normal)) {
+        button.setTitle(t, for: .normal)
+      }
+    } else if let field = view as? UITextField, let t = tr(field.placeholder) {
+      field.placeholder = t
+    }
+  }
+
+  static func translate(_ vc: UIViewController) {
+    if let t = tr(vc.title) { vc.title = t }
+    if let t = tr(vc.navigationItem.title) { vc.navigationItem.title = t }
+    for item in (vc.navigationItem.rightBarButtonItems ?? []) + (vc.navigationItem.leftBarButtonItems ?? []) {
+      if let t = tr(item.title) { item.title = t }
+    }
+  }
+}
+
+extension UIViewController {
+  @objc
+  fileprivate func bb_viewWillAppear(_ animated: Bool) {
+    bb_viewWillAppear(animated)
+    BBNibTranslator.translate(self)
+  }
+}
+
+extension UIView {
+  @objc
+  fileprivate func bb_viewAwakeFromNib() {
+    bb_viewAwakeFromNib()
+    BBNibTranslator.translate(self)
   }
 }

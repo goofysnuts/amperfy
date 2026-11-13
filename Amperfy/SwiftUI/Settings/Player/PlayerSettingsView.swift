@@ -75,7 +75,7 @@ struct PlayerSettingsView: View {
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Enable ReplayGain",
+              title: T("Enable ReplayGain"),
               isOn: Binding(
                 get: { settings.isReplayGainEnabled },
                 set: { isEnabled in
@@ -84,48 +84,48 @@ struct PlayerSettingsView: View {
               )
             )
           },
-          footer: "Automatically normalize track volume based on replay gain information for consistent loudness."
+          footer: T("Automatically normalize track volume based on replay gain information for consistent loudness.")
         )
 
         // General Settings
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Auto-cache played tracks and download upcoming ones",
+              title: T("Auto-cache played tracks and download upcoming ones"),
               isOn: $settings.isPlayerAutoCachePlayedItems
             )
           },
-          footer: "Played tracks (songs and podcast episodes) are cached automatically. The next \(PlayerDownloadPreparationHandler.preDownloadCount) tracks are downloaded in advance."
+          footer: T("Played tracks (songs and podcast episodes) are cached automatically. The next \(PlayerDownloadPreparationHandler.preDownloadCount) tracks are downloaded in advance.")
         )
 
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Song Playback Resume",
+              title: T("Song Playback Resume"),
               isOn: $settings.isPlayerSongPlaybackResumeEnabled
             )
           },
-          footer: "Keeps track of song progress so playback continues from the previously saved position."
+          footer: T("Keeps track of song progress so playback continues from the previously saved position.")
         )
 
         SettingsSection(content: {
-          SettingsCheckBoxRow(title: "Manual Playback", isOn: $settings.isPlaybackStartOnlyOnPlay)
-        }, footer: "Enable to start playback only when the Play button is pressed.")
+          SettingsCheckBoxRow(title: T("Manual Playback"), isOn: $settings.isPlaybackStartOnlyOnPlay)
+        }, footer: T("Enable to start playback only when the Play button is pressed."))
 
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Autoplay After End",
+              title: T("Autoplay After End"),
               isOn: $settings.isAutoplayEnabled
             )
           },
-          footer: "When the queue ends, automatically continue playback using Instant Mix to find similar songs."
+          footer: T("When the queue ends, automatically continue playback using Instant Mix to find similar songs.")
         )
 
         // Streaming Format Settings
         SettingsSection(
           content: {
-            SettingsRow(title: "Cellular Streaming\nFormat (Transcoding)") {
+            SettingsRow(title: T("Cellular Streaming\nFormat (Transcoding)")) {
               Menu(settings.streamingFormatCellularPreference.description) {
                 ForEach(StreamingFormatPreference.allCases, id: \.self) { format in
                   Button(format.description) {
@@ -135,12 +135,12 @@ struct PlayerSettingsView: View {
               }
             }
           },
-          footer: "Select a transcoding format for streaming while using Cellular. Transcoding is recommended for better compatibility."
+          footer: T("Select a transcoding format for streaming while using Cellular. Transcoding is recommended for better compatibility.")
         )
 
         SettingsSection(
           content: {
-            SettingsRow(title: "Cellular Streaming\nBitrate Limit") {
+            SettingsRow(title: T("Cellular Streaming\nBitrate Limit")) {
               Menu(settings.streamingMaxBitrateCellularPreference.description) {
                 ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { bitrate in
                   Button(bitrate.description) {
@@ -150,12 +150,12 @@ struct PlayerSettingsView: View {
               }
             }
           },
-          footer: "Set the maximum streaming bitrate for Cellular."
+          footer: T("Set the maximum streaming bitrate for Cellular.")
         )
 
         SettingsSection(
           content: {
-            SettingsRow(title: "WiFi Streaming\nFormat (Transcoding)") {
+            SettingsRow(title: T("WiFi Streaming\nFormat (Transcoding)")) {
               Menu(settings.streamingFormatWifiPreference.description) {
                 ForEach(StreamingFormatPreference.allCases, id: \.self) { format in
                   Button(format.description) {
@@ -165,12 +165,12 @@ struct PlayerSettingsView: View {
               }
             }
           },
-          footer: "Select a transcoding format for streaming while on WiFi. Transcoding is recommended for better compatibility."
+          footer: T("Select a transcoding format for streaming while on WiFi. Transcoding is recommended for better compatibility.")
         )
         // Streaming Bitrate Settings
         SettingsSection(
           content: {
-            SettingsRow(title: "WiFi Streaming\nBitrate Limit") {
+            SettingsRow(title: T("WiFi Streaming\nBitrate Limit")) {
               Menu(settings.streamingMaxBitrateWifiPreference.description) {
                 ForEach(StreamingMaxBitratePreference.allCases, id: \.self) { bitrate in
                   Button(bitrate.description) {
@@ -180,12 +180,12 @@ struct PlayerSettingsView: View {
               }
             }
           },
-          footer: "Set the maximum streaming bitrate for WiFi."
+          footer: T("Set the maximum streaming bitrate for WiFi.")
         )
 
         // Cache Format Settings
         SettingsSection(content: {
-          SettingsRow(title: "Cache\nFormat (Transcoding)") {
+          SettingsRow(title: T("Cache\nFormat (Transcoding)")) {
             Menu(settings.cacheTranscodingFormatPreference.description) {
               ForEach(CacheTranscodingFormatPreference.allCases, id: \.self) { format in
                 Button(format.description) {
@@ -207,7 +207,7 @@ struct PlayerSettingsView: View {
         """)
       }
     }
-    .navigationTitle("Player & Stream")
+    .navigationTitle(T("Player & Stream"))
     .navigationBarTitleDisplayMode(.inline)
     .onAppear {
       appDelegate.userStatistics.visited(.settingsPlayer)

@@ -107,7 +107,7 @@ class PlaylistAddPlaylistsVC: SingleSnapshotFetchedResultsTableViewController<Pl
       searchTiles = ["All", "Cached"]
     }
     configureSearchController(
-      placeholder: "Search in \"Playlists\"",
+      placeholder: T("Search in \"Playlists\""),
       scopeButtonTitles: searchTiles
     )
     tableView.register(nibName: PlaylistTableCell.typeName)

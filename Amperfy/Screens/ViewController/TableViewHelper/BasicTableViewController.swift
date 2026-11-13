@@ -403,7 +403,7 @@ class BasicTableViewController: KeyCommandTableViewController {
             message: "Are you sure to delete the cached file\(actionContext.playables.count > 1 ? "s" : "")?",
             preferredStyle: .alert
           )
-          alert.addAction(UIAlertAction(title: "Delete", style: .destructive, handler: { _ in
+          alert.addAction(UIAlertAction(title: T("Delete"), style: .destructive, handler: { _ in
             if let account = actionContext.containable.account {
               self.appDelegate.getMeta(account.info).playableDownloadManager
                 .removeFinishedDownload(for: actionContext.playables)
@@ -414,7 +414,7 @@ class BasicTableViewController: KeyCommandTableViewController {
               cell.refresh()
             }
           }))
-          alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+          alert.addAction(UIAlertAction(title: T("Cancel"), style: .cancel, handler: { _ in
             // do nothing
           }))
           self.present(alert, animated: true, completion: nil)

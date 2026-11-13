@@ -193,7 +193,7 @@ class LibraryElementDetailTableHeaderView: UIView {
       b.heightAnchor.constraint(equalToConstant: 38).isActive = true
       return b
     }
-    let shuffle = round("shuffle", label: "Zufällig") { [weak self] in
+    let shuffle = round("shuffle", label: T("Zufällig")) { [weak self] in
       guard let self else { return }
       Haptics.success.vibrate(isHapticsEnabled: self.appDelegate.storage.settings.user.isHapticsEnabled)
       self.shuffle()
@@ -216,7 +216,7 @@ class LibraryElementDetailTableHeaderView: UIView {
       self.play(isShuffled: false)
     })
     play.heightAnchor.constraint(equalToConstant: 38).isActive = true
-    let download = round("arrow.down", label: "Herunterladen") { [weak self] in
+    let download = round("arrow.down", label: T("Herunterladen")) { [weak self] in
       guard let self, let context = self.config?.playContextCb?(),
             let info = context.playables.first?.account?.info else { return }
       self.appDelegate.getMeta(info).playableDownloadManager.download(objects: context.playables)

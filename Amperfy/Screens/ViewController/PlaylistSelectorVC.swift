@@ -95,7 +95,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
 
     change(sortType: appDelegate.storage.settings.user.playlistsSortSetting)
 
-    configureSearchController(placeholder: "Search in \"Playlists\"")
+    configureSearchController(placeholder: T("Search in \"Playlists\""))
     tableView.register(nibName: PlaylistTableCell.typeName)
     tableView.reloadOnTextSizeChange { PlaylistTableCell.rowHeight }
     tableView.sectionFooterHeight = 0.0
@@ -127,7 +127,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       action: nil
     )
     selectBarButton = UIBarButtonItem(
-      title: "Select",
+      title: T("Select"),
       style: .plain,
       target: self,
       action: #selector(selectBarButtonPressed)
@@ -226,7 +226,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
 
   private func createSortButtonMenu() -> UIMenu {
     let sortByName = UIAction(
-      title: "Name",
+      title: T("Name"),
       image: sortType == .name ? .check : nil,
       handler: { _ in
         self.change(sortType: .name)
@@ -239,7 +239,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       }
     )
     let sortByLastTimePlayed = UIAction(
-      title: "Last time played",
+      title: T("Last time played"),
       image: sortType == .lastPlayed ? .check : nil,
       handler: { _ in
         self.change(sortType: .lastPlayed)
@@ -252,7 +252,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       }
     )
     let sortByChangeDate = UIAction(
-      title: "Change date",
+      title: T("Change date"),
       image: sortType == .lastChanged ? .check : nil,
       handler: { _ in
         self.change(sortType: .lastChanged)
@@ -265,7 +265,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       }
     )
     let sortByDuration = UIAction(
-      title: "Duration",
+      title: T("Duration"),
       image: sortType == .duration ? .check : nil,
       handler: { _ in
         self.change(sortType: .duration)
@@ -278,7 +278,7 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       }
     )
     return UIMenu(
-      title: "Sort",
+      title: T("Sort"),
       image: .sort,
       options: [],
       children: [sortByName, sortByLastTimePlayed, sortByChangeDate, sortByDuration]
@@ -361,16 +361,16 @@ class PlaylistSelectorVC: SingleSnapshotFetchedResultsTableViewController<Playli
       if itemsNotContained.count != itemsToAdd.count {
         let alert = UIAlertController(
           title: nil,
-          message: "Some Songs are already in this Playlist.",
+          message: T("Some Songs are already in this Playlist."),
           preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "Add Duplicates", style: .default, handler: { _ in
+        alert.addAction(UIAlertAction(title: T("Add Duplicates"), style: .default, handler: { _ in
           handleSuccessfullSelection(playables: self.itemsToAdd)
         }))
-        alert.addAction(UIAlertAction(title: "Skip Duplicates", style: .default, handler: { _ in
+        alert.addAction(UIAlertAction(title: T("Skip Duplicates"), style: .default, handler: { _ in
           handleSuccessfullSelection(playables: Array(itemsNotContained))
         }))
-        alert.addAction(UIAlertAction(title: "Cancel", style: .default, handler: { _ in
+        alert.addAction(UIAlertAction(title: T("Cancel"), style: .default, handler: { _ in
           // do nothing
         }))
         present(alert, animated: true, completion: nil)

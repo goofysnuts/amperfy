@@ -38,8 +38,8 @@ public enum PlayerDisplayStyle: Int, Sendable, Codable {
 
   public var description: String {
     switch self {
-    case .compact: return "Compact"
-    case .large: return "Large"
+    case .compact: return T("Compact")
+    case .large: return T("Large")
     }
   }
 }

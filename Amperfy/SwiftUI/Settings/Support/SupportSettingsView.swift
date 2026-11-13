@@ -42,7 +42,7 @@ struct SupportSettingsView: View {
       SettingsList {
         SettingsSection {
           SettingsButtonRow(
-            title: "Report an issue on GitHub",
+            title: T("Report an issue on GitHub"),
             splitPercentage: splitPercentage
           ) {
             if let url = URL(string: "https://github.com/BLeeEZ/amperfy/issues") {
@@ -50,7 +50,7 @@ struct SupportSettingsView: View {
             }
           }
           SettingsButtonRow(
-            title: "Send issue or feedback to developer",
+            title: T("Send issue or feedback to developer"),
             splitPercentage: splitPercentage
           ) {
             if MFMailComposeViewController.canSendMail() {
@@ -59,7 +59,7 @@ struct SupportSettingsView: View {
               appDelegate.eventLogger.info(
                 topic: "Email Info",
                 statusCode: .emailError,
-                message: "Email is not configured in settings app or Amperfy is not able to send an email.",
+                message: T("Email is not configured in settings app or Amperfy is not able to send an email."),
                 displayPopup: true
               )
             }
@@ -68,13 +68,13 @@ struct SupportSettingsView: View {
             item: AmperfyLogExport(),
             preview: SharePreview(AmperfyLogExport.fileName)
           ) {
-            Text("Export log")
+            Text(T("Export log"))
           }
         }
 
         SettingsSection {
           NavigationLink(value: Destination.eventLog) {
-            Text("Event Log")
+            Text(T("Event Log"))
           }
         }
       }
@@ -98,7 +98,7 @@ struct SupportSettingsView: View {
         )
       }
     }
-    .navigationTitle("Support")
+    .navigationTitle(T("Support"))
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(for: Destination.self) { destination in
       switch destination {

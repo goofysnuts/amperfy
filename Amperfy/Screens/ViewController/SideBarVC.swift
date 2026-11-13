@@ -36,9 +36,9 @@ class SideBarVC: KeyCommandCollectionViewController {
 
   private var offsetData: [LibraryNavigatorItem] = {
     [
-      LibraryNavigatorItem(title: "Search", tab: .search),
-      LibraryNavigatorItem(title: "Home", tab: .home),
-      LibraryNavigatorItem(title: "Library", isInteractable: false),
+      LibraryNavigatorItem(title: T("Search"), tab: .search),
+      LibraryNavigatorItem(title: T("Home"), tab: .home),
+      LibraryNavigatorItem(title: T("Library"), isInteractable: false),
     ]
   }()
 

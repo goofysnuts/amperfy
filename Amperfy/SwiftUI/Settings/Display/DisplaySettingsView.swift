@@ -37,18 +37,18 @@ struct DisplaySettingsView: View {
     ZStack {
       SettingsList {
         SettingsSection {
-          SettingsRow(title: "Appearance") {
+          SettingsRow(title: T("Appearance")) {
             Menu(
               settings.appearanceMode == .unspecified ? "System" :
                 (settings.appearanceMode == .light ? "Light" : "Dark")
             ) {
-              Button("System") {
+              Button(T("System")) {
                 setAppearanceMode(style: .unspecified)
               }
-              Button("Light") {
+              Button(T("Light")) {
                 setAppearanceMode(style: .light)
               }
-              Button("Dark") {
+              Button(T("Dark")) {
                 setAppearanceMode(style: .dark)
               }
             }
@@ -64,7 +64,7 @@ struct DisplaySettingsView: View {
         #if !targetEnvironment(macCatalyst)
           SettingsSection(
             content: {
-              SettingsCheckBoxRow(title: "Haptic Feedback", isOn: $settings.isHapticsEnabled)
+              SettingsCheckBoxRow(title: T("Haptic Feedback"), isOn: $settings.isHapticsEnabled)
             },
             footer:
             "Certain interactions provide haptic feedback. Long pressing to display the details menu will always trigger haptic feedback."
@@ -77,7 +77,7 @@ struct DisplaySettingsView: View {
           SettingsSection(
             content: {
               SettingsCheckBoxRow(
-                title: "Mini Player Always on Top",
+                title: T("Mini Player Always on Top"),
                 isOn: $settings.isMiniPlayerAlwaysOnTop
               )
             },
@@ -89,7 +89,7 @@ struct DisplaySettingsView: View {
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Music Player Skip Buttons",
+              title: T("Music Player Skip Buttons"),
               isOn: $settings.isShowMusicPlayerSkipButtons
             )
           },
@@ -104,7 +104,7 @@ struct DisplaySettingsView: View {
           SettingsSection(
             content: {
               SettingsCheckBoxRow(
-                title: "Lyrics Smooth Scrolling",
+                title: T("Lyrics Smooth Scrolling"),
                 isOn: $settings.isLyricsSmoothScrolling
               )
             },
@@ -116,7 +116,7 @@ struct DisplaySettingsView: View {
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Detailed Information",
+              title: T("Detailed Information"),
               isOn: $settings.isShowDetailedInfo
             )
           },
@@ -126,7 +126,7 @@ struct DisplaySettingsView: View {
 
         SettingsSection(
           content: {
-            SettingsCheckBoxRow(title: "Song Duration", isOn: $settings.isShowSongDuration)
+            SettingsCheckBoxRow(title: T("Song Duration"), isOn: $settings.isShowSongDuration)
           },
           footer:
           "Display song duration in table rows."
@@ -134,7 +134,7 @@ struct DisplaySettingsView: View {
 
         SettingsSection(
           content: {
-            SettingsCheckBoxRow(title: "Album Duration", isOn: $settings.isShowAlbumDuration)
+            SettingsCheckBoxRow(title: T("Album Duration"), isOn: $settings.isShowAlbumDuration)
           },
           footer:
           "Display album duration in table rows."
@@ -142,7 +142,7 @@ struct DisplaySettingsView: View {
 
         SettingsSection(
           content: {
-            SettingsCheckBoxRow(title: "Artist Duration", isOn: $settings.isShowArtistDuration)
+            SettingsCheckBoxRow(title: T("Artist Duration"), isOn: $settings.isShowArtistDuration)
           },
           footer:
           "Display artist duration in table rows."
@@ -150,7 +150,7 @@ struct DisplaySettingsView: View {
 
         SettingsSection(
           content: {
-            SettingsCheckBoxRow(title: "Show Star Rating", isOn: $settings.isShowRating)
+            SettingsCheckBoxRow(title: T("Show Star Rating"), isOn: $settings.isShowRating)
           },
           footer:
           "Display star rating in song cells and the currently playing view."
@@ -159,7 +159,7 @@ struct DisplaySettingsView: View {
         SettingsSection(
           content: {
             SettingsCheckBoxRow(
-              title: "Disable Player Shuffle Button",
+              title: T("Disable Player Shuffle Button"),
               isOn: Binding<Bool>(
                 get: { !settings.isPlayerShuffleButtonEnabled },
                 set: {
@@ -177,7 +177,7 @@ struct DisplaySettingsView: View {
           SettingsSection(
             content: {
               SettingsCheckBoxRow(
-                title: "Collapse Toolbar Player",
+                title: T("Collapse Toolbar Player"),
                 isOn: $settings.isToolbarPlayerAutoCollapse
               )
             },
@@ -187,7 +187,7 @@ struct DisplaySettingsView: View {
         #endif
       }
     }
-    .navigationTitle("Display")
+    .navigationTitle(T("Display"))
     .navigationBarTitleDisplayMode(.inline)
   }
 }

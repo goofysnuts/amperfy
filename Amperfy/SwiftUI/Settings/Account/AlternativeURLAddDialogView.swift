@@ -115,7 +115,7 @@ struct AlternativeURLAddDialogView: View {
         Section {
           VStack {
             VStack(spacing: 20) {
-              Text("Add alternative URL").font(.title2).fontWeight(.bold).padding(.all, 10)
+              Text(T("Add alternative URL")).font(.title2).fontWeight(.bold).padding(.all, 10)
 
               Text(
                 "The URL must reach the same server. Otherwise library inconsistencies will occur."
@@ -151,7 +151,7 @@ struct AlternativeURLAddDialogView: View {
               Button(action: { isVisible = false }) {
                 HStack {
                   Spacer()
-                  Text("Cancel")
+                  Text(T("Cancel"))
                     .fontWeight(.semibold)
                   Spacer()
                 }
@@ -161,7 +161,7 @@ struct AlternativeURLAddDialogView: View {
               Button(action: { handleAdd() }) {
                 HStack {
                   Spacer()
-                  Text("Add")
+                  Text(T("Add"))
                   Spacer()
                 }
               }

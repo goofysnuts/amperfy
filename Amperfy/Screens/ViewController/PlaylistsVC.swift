@@ -96,7 +96,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
     switch filter {
     case .only(.topMix): return LibraryDisplayType.spotifyPlaylists.displayName
     case .only(.ownMix): return LibraryDisplayType.ownMixes.displayName
-    default: return "Playlists"
+    default: return T("Playlists")
     }
   }
 
@@ -213,15 +213,15 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
     var config = UIContentUnavailableConfiguration.empty()
     if self.spotifyFilter == .only(.topMix) {
       config.image = .topMixes
-      config.text = "Keine Spotify-Mixes"
+      config.text = T("Keine Spotify-Mixes")
       config.secondaryText = "Spotify-Mixe, die mit dem Navidrome-Plugin „Spotify Playlist Import“ als „Mix“ importiert werden, erscheinen hier."
     } else if self.spotifyFilter == .only(.ownMix) {
       config.image = .ownMixes
-      config.text = "Keine Mixes"
+      config.text = T("Keine Mixes")
       config.secondaryText = "Mixe des Navidrome-Plugins „Eigene Mixe“ erscheinen hier."
     } else {
       config.image = .playlist
-      config.text = "No Playlists"
+      config.text = T("No Playlists")
       config.secondaryText = "Your playlists will appear here."
     }
     return config
@@ -303,7 +303,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
 
   private func createSortButtonMenu() -> UIMenu {
     let sortByName = UIAction(
-      title: "Name",
+      title: T("Name"),
       image: sortType == .name ? .check : nil,
       handler: { _ in
         self.change(sortType: .name)
@@ -316,7 +316,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       }
     )
     let sortByLastTimePlayed = UIAction(
-      title: "Last time played",
+      title: T("Last time played"),
       image: sortType == .lastPlayed ? .check : nil,
       handler: { _ in
         self.change(sortType: .lastPlayed)
@@ -329,7 +329,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       }
     )
     let sortByChangeDate = UIAction(
-      title: "Change date",
+      title: T("Change date"),
       image: sortType == .lastChanged ? .check : nil,
       handler: { _ in
         self.change(sortType: .lastChanged)
@@ -342,7 +342,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       }
     )
     let sortByDuration = UIAction(
-      title: "Duration",
+      title: T("Duration"),
       image: sortType == .duration ? .check : nil,
       handler: { _ in
         self.change(sortType: .duration)
@@ -355,7 +355,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
       }
     )
     return UIMenu(
-      title: "Sort",
+      title: T("Sort"),
       image: .sort,
       options: [.displayInline],
       children: [sortByName, sortByLastTimePlayed, sortByChangeDate, sortByDuration]
@@ -363,7 +363,7 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
   }
 
   private func createOptionsButtonMenu() -> UIMenu {
-    let fetchAllPlaylists = UIAction(title: "Sync All Playlists", image: .refresh, handler: { _ in
+    let fetchAllPlaylists = UIAction(title: T("Sync All Playlists"), image: .refresh, handler: { _ in
       Task { @MainActor in do {
         let accountObjectId = self.account.managedObject.objectID
         let playlistsIds = try await self.appDelegate.storage.async
@@ -388,14 +388,14 @@ class PlaylistsVC: SingleSnapshotFetchedResultsTableViewController<PlaylistMO> {
         }
         self.appDelegate.eventLogger.info(
           topic: "Sync All Playlists",
-          message: "All playlists have been synced."
+          message: T("All playlists have been synced.")
         )
       } catch {
         self.appDelegate.eventLogger.report(topic: "Sync All Playlists", error: error)
       }}
     })
     return UIMenu(
-      title: "Options",
+      title: T("Options"),
       image: .sort,
       options: [.displayInline],
       children: [fetchAllPlaylists]

@@ -33,11 +33,11 @@ public enum DownloadError: Error {
 
   public var description: String {
     switch self {
-    case .urlInvalid: return "Invalid URL"
-    case .noConnectivity: return "No Connectivity"
-    case .alreadyDownloaded: return "Already Downloaded"
-    case .fetchFailed: return "Fetch Failed"
-    case .emptyFile: return "File is empty"
+    case .urlInvalid: return T("Invalid URL")
+    case .noConnectivity: return T("No Connectivity")
+    case .alreadyDownloaded: return T("Already Downloaded")
+    case .fetchFailed: return T("Fetch Failed")
+    case .emptyFile: return T("File is empty")
     case .apiErrorResponse: return "API Error"
     case .canceled: return "Cancled"
     case .fileManagerError: return "File Manager Error"

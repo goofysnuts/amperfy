@@ -46,10 +46,10 @@ struct XCallbackURLsSetttingsView: View {
                 .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding([.top, .bottom], 8)
-              Text("Action: \(actionDocu.action)")
+              Text(T("Action: \(actionDocu.action)"))
                 .font(.caption)
                 .padding([.bottom], 8)
-              Text("Example URLs:")
+              Text(T("Example URLs:"))
                 .font(.caption)
                 .underline()
                 .padding([.bottom], 4)
@@ -64,7 +64,7 @@ struct XCallbackURLsSetttingsView: View {
               }
 
               if !actionDocu.parameters.isEmpty {
-                Text("Parameters:")
+                Text(T("Parameters:"))
                   .font(.caption)
                   .underline()
                   .padding([.top], 8)
@@ -74,14 +74,14 @@ struct XCallbackURLsSetttingsView: View {
                   .font(.caption)
                   .fontWeight(.bold)
                   .padding([.top], 4)
-                Text("Type: \(para.type)")
+                Text(T("Type: \(para.type)"))
                   .font(.caption)
                   .padding([.leading], 8)
-                Text("Description: \(para.description)")
+                Text(T("Description: \(para.description)"))
                   .font(.caption)
                   .padding([.leading], 8)
                 if !para.isMandatory, let defaultValue = para.defaultIfNotGiven {
-                  Text("Default: \(defaultValue)")
+                  Text(T("Default: \(defaultValue)"))
                     .font(.caption)
                     .padding([.leading], 8)
                 }
@@ -91,7 +91,7 @@ struct XCallbackURLsSetttingsView: View {
         }
       }
     }
-    .navigationTitle("X-Callback-URL Documentation")
+    .navigationTitle(T("X-Callback-URL Documentation"))
     .navigationBarTitleDisplayMode(.inline)
   }
 }

@@ -89,8 +89,8 @@ public enum RepeatMode: Int16, CaseIterable {
 
   public var description: String {
     switch self {
-    case .off: return "Off"
-    case .all: return "All"
+    case .off: return T("Off")
+    case .all: return T("All")
     case .single: return "Single"
     }
   }
@@ -201,9 +201,9 @@ public enum PlayerQueueType: Int, CaseIterable {
 
   public var description: String {
     switch self {
-    case .prev: return "Previous"
-    case .user: return "Next in Queue"
-    case .next: return "Next"
+    case .prev: return T("Previous")
+    case .user: return T("Next in Queue")
+    case .next: return T("Next")
     }
   }
 }

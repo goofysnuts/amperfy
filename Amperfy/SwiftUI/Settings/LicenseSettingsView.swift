@@ -20,6 +20,7 @@
 //
 
 import SwiftUI
+import AmperfyKit
 
 // MARK: - LicenseSettingsView
 
@@ -546,7 +547,7 @@ struct LicenseSettingsView: View {
           .padding([.leading, .trailing, .top, .bottom], 16)
       }
     }
-    .navigationTitle("Licenses")
+    .navigationTitle(T("Licenses"))
     .navigationBarTitleDisplayMode(.inline)
   }
 }

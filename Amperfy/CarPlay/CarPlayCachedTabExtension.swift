@@ -102,7 +102,7 @@ extension CarPlaySceneDelegate {
     }
     let libDisplaySection = CPListSection(
       items: [libDisplayRow],
-      header: "Cached Library",
+      header: T("Cached Library"),
       sectionIndexTitle: nil
     )
     return libDisplaySection
@@ -153,7 +153,7 @@ extension CarPlaySceneDelegate {
     }
     let playRandomSection = CPListSection(
       items: [playRandomRow],
-      header: "Play Random Cached",
+      header: T("Play Random Cached"),
       sectionIndexTitle: nil
     )
     return playRandomSection

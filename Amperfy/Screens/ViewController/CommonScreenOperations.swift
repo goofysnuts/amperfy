@@ -90,7 +90,7 @@ extension UIViewController {
       let addAccountImage = UIImage.userCirclePlus
     #endif
     let openAddAccount = UIAction(
-      title: "Add Account",
+      title: T("Add Account"),
       image: addAccountImage,
       handler: { _ in
         let loginVC = AppStoryboard.Main.segueToLogin()
@@ -99,7 +99,7 @@ extension UIViewController {
       }
     )
     let openSettings = UIAction(
-      title: "Settings",
+      title: T("Settings"),
       image: .settings,
       handler: { _ in
         #if targetEnvironment(macCatalyst)

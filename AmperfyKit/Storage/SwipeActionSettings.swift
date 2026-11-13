@@ -41,58 +41,58 @@ public enum SwipeActionType: Int, CaseIterable, Sendable, Codable {
   public var displayName: String {
     switch self {
     case .insertUserQueue:
-      return "Insert User Queue"
+      return T("Insert User Queue")
     case .appendUserQueue:
-      return "Append User Queue"
+      return T("Append User Queue")
     case .insertContextQueue:
-      return "Insert Context Queue"
+      return T("Insert Context Queue")
     case .appendContextQueue:
-      return "Append Context Queue"
+      return T("Append Context Queue")
     case .download:
-      return "Download"
+      return T("Download")
     case .removeFromCache:
-      return "Remove from Cache"
+      return T("Remove from Cache")
     case .addToPlaylist:
-      return "Add to Playlist"
+      return T("Add to Playlist")
     case .play:
-      return "Play"
+      return T("Play")
     case .playShuffled:
-      return "Play shuffled"
+      return T("Play shuffled")
     case .insertPodcastQueue:
-      return "Insert Podcast Queue"
+      return T("Insert Podcast Queue")
     case .appendPodcastQueue:
-      return "Append Podcast Queue"
+      return T("Append Podcast Queue")
     case .favorite:
-      return "Favorite"
+      return T("Favorite")
     }
   }
 
   public var settingsName: String {
     switch self {
     case .insertUserQueue:
-      return "Insert in User Queue"
+      return T("Insert in User Queue")
     case .appendUserQueue:
-      return "Append to User Queue"
+      return T("Append to User Queue")
     case .insertContextQueue:
-      return "Insert in Context Queue"
+      return T("Insert in Context Queue")
     case .appendContextQueue:
-      return "Append to Context Queue"
+      return T("Append to Context Queue")
     case .download:
-      return "Download"
+      return T("Download")
     case .removeFromCache:
-      return "Remove from Cache"
+      return T("Remove from Cache")
     case .addToPlaylist:
-      return "Add to Playlist"
+      return T("Add to Playlist")
     case .play:
-      return "Play"
+      return T("Play")
     case .playShuffled:
-      return "Play shuffled"
+      return T("Play shuffled")
     case .insertPodcastQueue:
-      return "Insert in Podcast Queue"
+      return T("Insert in Podcast Queue")
     case .appendPodcastQueue:
-      return "Append to Podcast Queue"
+      return T("Append to Podcast Queue")
     case .favorite:
-      return "Mark as Favorite"
+      return T("Mark as Favorite")
     }
   }
 

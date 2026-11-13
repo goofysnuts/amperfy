@@ -75,12 +75,12 @@ struct TextSizeSettingsSection: View {
 
   private var textSizeFooter: String {
     #if targetEnvironment(macCatalyst)
-      return "\(Self.textSizeName(currentTextSize)): Size of the text in lists and album grids."
+      return T("\(Self.textSizeName(currentTextSize)): Size of the text in lists and album grids.")
     #else
       guard settings.textSize != nil else {
-        return "Amperfy uses the text size from the iOS settings."
+        return T("Amperfy uses the text size from the iOS settings.")
       }
-      return "\(Self.textSizeName(currentTextSize)): Size of the text in Amperfy."
+      return T("\(Self.textSizeName(currentTextSize)): Size of the text in Amperfy.")
     #endif
   }
 
@@ -106,16 +106,16 @@ struct TextSizeSettingsSection: View {
     SettingsSection(
       content: {
         #if !targetEnvironment(macCatalyst)
-          SettingsCheckBoxRow(title: "Use System Text Size", isOn: isSystemTextSize)
+          SettingsCheckBoxRow(title: T("Use System Text Size"), isOn: isSystemTextSize)
         #endif
         if isTextSizeSliderVisible {
-          SettingsRow(title: "Text Size") {
+          SettingsRow(title: T("Text Size")) {
             Slider(
               value: textSizeIndex,
               in: 0 ... Double(TextScaling.textSizes.count - 1),
               step: 1
             ) {
-              Text("Text Size")
+              Text(T("Text Size"))
             } minimumValueLabel: {
               Image(systemName: "textformat.size.smaller")
             } maximumValueLabel: {

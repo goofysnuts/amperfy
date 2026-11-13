@@ -66,10 +66,10 @@ public enum PlayableContainerBaseType: Int, Codable {
   public var displayString: String {
     switch self {
     case .song: return "Song"
-    case .podcastEpisode: return "Podcast Episode"
+    case .podcastEpisode: return T("Podcast Episode")
     case .album: return "Album"
-    case .artist: return "Artist"
-    case .genre: return "Genre"
+    case .artist: return T("Artist")
+    case .genre: return T("Genre")
     case .playlist: return "Playlist"
     case .podcast: return "Podcast"
     case .directory: return "Directory"

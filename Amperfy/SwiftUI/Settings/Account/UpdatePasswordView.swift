@@ -81,7 +81,7 @@ struct UpdatePasswordView: View {
         Section {
           VStack {
             VStack(spacing: 20) {
-              Text("Update Password").font(.title2).fontWeight(.bold).padding(.all, 10)
+              Text(T("Update Password")).font(.title2).fontWeight(.bold).padding(.all, 10)
 
               if !successMsg.isEmpty {
                 InfoBannerView(message: successMsg, color: .success)
@@ -103,7 +103,7 @@ struct UpdatePasswordView: View {
               Button(action: { isVisible = false }) {
                 HStack {
                   Spacer()
-                  Text("Cancel")
+                  Text(T("Cancel"))
                     .fontWeight(.semibold)
                   Spacer()
                 }
@@ -113,7 +113,7 @@ struct UpdatePasswordView: View {
               Button(action: { updatePassword() }) {
                 HStack {
                   Spacer()
-                  Text("OK")
+                  Text(T("OK"))
                   Spacer()
                 }
               }

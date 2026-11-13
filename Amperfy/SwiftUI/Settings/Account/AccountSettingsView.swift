@@ -140,14 +140,14 @@ struct AccountSettingsView: View {
       SettingsList {
         if let activeAccountInfo = settings.activeAccountInfo {
           SettingsSection {
-            SettingsRow(title: "URL", orientation: .vertical, splitPercentage: splitPercentage) {
+            SettingsRow(title: T("URL"), orientation: .vertical, splitPercentage: splitPercentage) {
               SecondaryText(
                 appDelegate.storage.settings.accounts.getSetting(settings.activeAccountInfo).read
                   .loginCredentials?.displayServerUrl ?? ""
               )
             }
             SettingsRow(
-              title: "Username",
+              title: T("Username"),
               orientation: .vertical,
               splitPercentage: splitPercentage
             ) {
@@ -159,7 +159,7 @@ struct AccountSettingsView: View {
           }
 
           SettingsSection {
-            SettingsRow(title: "Theme Color") {
+            SettingsRow(title: T("Theme Color")) {
               Menu(settings.themePreference.description) {
                 Button(ThemePreference.blue.description) {
                   setThemePreference(preference: .blue)
@@ -185,27 +185,27 @@ struct AccountSettingsView: View {
 
           SettingsSection(content: {
             SettingsCheckBoxRow(
-              title: "Newest Songs",
+              title: T("Newest Songs"),
               isOn: $settings.isAutoCacheLatestSongs
             )
             SettingsCheckBoxRow(
-              title: "Newest Podcast Episodes",
+              title: T("Newest Podcast Episodes"),
               isOn: $settings.isAutoCacheLatestPodcastEpisodes
             )
-          }, header: "Auto Cache")
+          }, header: T("Auto Cache"))
 
           SettingsSection(
             content: {
               SettingsCheckBoxRow(
-                title: "Scrobble streamed Songs",
+                title: T("Scrobble streamed Songs"),
                 isOn: $settings.isScrobbleStreamedItems
               )
             },
-            footer: "Enable to scrobble all streamed songs, even if the server already marks them as played."
+            footer: T("Enable to scrobble all streamed songs, even if the server already marks them as played.")
           )
 
           SettingsSection {
-            SettingsRow(title: "Backend API", splitPercentage: splitPercentage) {
+            SettingsRow(title: T("Backend API"), splitPercentage: splitPercentage) {
               Text(
                 appDelegate.storage.settings.accounts.getSetting(settings.activeAccountInfo).read
                   .loginCredentials?
@@ -219,12 +219,12 @@ struct AccountSettingsView: View {
               )
             }
 
-            SettingsRow(title: "Server API Version", splitPercentage: splitPercentage) {
+            SettingsRow(title: T("Server API Version"), splitPercentage: splitPercentage) {
               Text(appDelegate.getMeta(activeAccountInfo).backendApi.serverApiVersion)
                 .foregroundColor(.secondary)
                 .help(appDelegate.getMeta(activeAccountInfo).backendApi.serverApiVersion)
             }
-            SettingsRow(title: "Client API Version", splitPercentage: splitPercentage) {
+            SettingsRow(title: T("Client API Version"), splitPercentage: splitPercentage) {
               Text(appDelegate.getMeta(activeAccountInfo).backendApi.clientApiVersion)
                 .foregroundColor(.secondary)
                 .help(appDelegate.getMeta(activeAccountInfo).backendApi.clientApiVersion)
@@ -233,26 +233,26 @@ struct AccountSettingsView: View {
 
           SettingsSection {
             NavigationLink(value: Destination.serverURLs) {
-              Text("Manage Server URLs")
+              Text(T("Manage Server URLs"))
             }
             NavigationLink(value: Destination.customHTTPHeaders) {
-              Text("Custom HTTP Headers")
+              Text(T("Custom HTTP Headers"))
             }
           }
 
           SettingsSection {
-            SettingsButtonRow(title: "Update Password") {
+            SettingsButtonRow(title: T("Update Password")) {
               withPopupAnimation { isPwUpdateDialogVisible = true }
             }
-            SettingsButtonRow(title: "Resync Library") {
+            SettingsButtonRow(title: T("Resync Library")) {
               isShowResyncLibraryAlert = true
             }.alert(isPresented: $isShowResyncLibraryAlert) {
               Alert(
-                title: Text("Resync Library"),
+                title: Text(T("Resync Library")),
                 message: Text(
                   "This will reset your local library and start syncing again from the server. Your downloaded files will remain on this device.\n\nDo you want to resync your library?"
                 ),
-                primaryButton: .destructive(Text("Resync")) {
+                primaryButton: .destructive(Text(T("Resync"))) {
                   resyncLibrary(accountInfo: activeAccountInfo)
                 },
                 secondaryButton: .cancel()
@@ -261,16 +261,16 @@ struct AccountSettingsView: View {
           }
 
           SettingsSection {
-            SettingsButtonRow(title: "Logout", actionType: .destructive) {
+            SettingsButtonRow(title: T("Logout"), actionType: .destructive) {
               isShowLogoutAlert = true
             }
             .alert(isPresented: $isShowLogoutAlert) {
               Alert(
-                title: Text("Logout"),
+                title: Text(T("Logout")),
                 message: Text(
                   "Logging out will sign you out of the current account. Your login credentials will be removed, and all downloaded files for this account will be deleted.\n\nDo you want to log out?"
                 ),
-                primaryButton: .destructive(Text("Logout")) {
+                primaryButton: .destructive(Text(T("Logout"))) {
                   logout(accountInfo: activeAccountInfo)
                 },
                 secondaryButton: .cancel()
@@ -285,7 +285,7 @@ struct AccountSettingsView: View {
         }
       }
     }
-    .navigationTitle("Account")
+    .navigationTitle(T("Account"))
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(for: Destination.self) { destination in
       switch destination {

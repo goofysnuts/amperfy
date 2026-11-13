@@ -20,6 +20,7 @@
 //
 
 import SwiftUI
+import AmperfyKit
 
 // MARK: - HTTPHeaderEntry
 
@@ -92,20 +93,20 @@ struct CustomHTTPHeadersView: View {
         }
 
         Button(action: addEmptyHeader) {
-          Label("Add Header", systemImage: "plus")
+          Label(T("Add Header"), systemImage: "plus")
         }
       }
 
       Section {
         Button(action: addCloudflareAccessToken) {
-          Label("Add Cloudflare Access Token", systemImage: "lock.shield")
+          Label(T("Add Cloudflare Access Token"), systemImage: "lock.shield")
         }
       }
     }
     .onChange(of: entries) { _, _ in
       commit()
     }
-    .navigationTitle("Custom HTTP Headers")
+    .navigationTitle(T("Custom HTTP Headers"))
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
       EditButton()

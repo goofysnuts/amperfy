@@ -19,6 +19,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 import SwiftUI
+import AmperfyKit
 
 /// Settings section to choose one of the alternate app icons
 struct AppIconSettingsSection: View {
@@ -92,7 +93,7 @@ struct AppIconSettingsSection: View {
     SettingsSection(
       content: {
         VStack(spacing: 16) {
-          Picker("Icon Family", selection: $selectedAppIconCategory) {
+          Picker(T("Icon Family"), selection: $selectedAppIconCategory) {
             ForEach(AppIconCategory.allCases) { category in
               Text(category.title)
                 .tag(category)
@@ -146,14 +147,14 @@ struct AppIconSettingsSection: View {
           }
         }
       },
-      header: "App Icon"
+      header: T("App Icon")
     )
     .onAppear {
       selectedAppIconName = UIApplication.shared.alternateIconName
       selectedAppIconCategory = Self.category(ofIconName: selectedAppIconName)
     }
-    .alert("Unable to Change App Icon", isPresented: $isShowingAppIconError) {
-      Button("OK", role: .cancel) {}
+    .alert(T("Unable to Change App Icon"), isPresented: $isShowingAppIconError) {
+      Button(T("OK"), role: .cancel) {}
     } message: {
       Text(appIconErrorMessage)
     }

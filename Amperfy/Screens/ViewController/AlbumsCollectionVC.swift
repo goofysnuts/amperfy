@@ -142,7 +142,7 @@ class AlbumsCollectionDiffableDataSource: BasicUICollectionViewDiffableDataSourc
       if album.rating > 0 {
         return "\(album.rating) Star\(album.rating != 1 ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .newest, .recent:
       return ""
@@ -236,7 +236,7 @@ class AlbumsCollectionVC: SingleSnapshotFetchedResultsCollectionViewController<A
 
     common.applyFilter()
     configureSearchController(
-      placeholder: "Search in \"\(common.filterTitle)\"",
+      placeholder: T("Search in \"\(common.filterTitle)\""),
       scopeButtonTitles: ["All", "Cached"]
     )
     collectionView.register(

@@ -33,8 +33,8 @@ public enum LogEntryType: Int16, Sendable {
   public var description: String {
     switch self {
     case .apiError: return "API Error"
-    case .error: return "Error"
-    case .info: return "Info"
+    case .error: return T("Error")
+    case .info: return T("Info")
     case .debug: return "Debug"
     }
   }

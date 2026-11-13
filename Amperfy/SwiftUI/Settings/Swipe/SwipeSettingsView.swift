@@ -77,7 +77,7 @@ struct SwipeSettingsView: View {
         Section(
           header:
           HStack {
-            Text("Leading")
+            Text(T("Leading"))
             Spacer()
             Button(action: {
               addPositionType = .leading
@@ -102,7 +102,7 @@ struct SwipeSettingsView: View {
         Section(
           header:
           HStack {
-            Text("Trailing")
+            Text(T("Trailing"))
             Spacer()
             Button(action: {
               addPositionType = .trailing
@@ -134,7 +134,7 @@ struct SwipeSettingsView: View {
           )
         }
     }
-    .navigationTitle("Swipe")
+    .navigationTitle(T("Swipe"))
     .navigationBarTitleDisplayMode(.inline)
     .onAppear {
       reload()

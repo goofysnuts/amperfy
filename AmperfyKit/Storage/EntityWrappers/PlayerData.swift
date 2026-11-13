@@ -342,7 +342,7 @@ extension PlayerData: PlayerQueuesPersistent {
     case .music:
       return contextPlaylist.name
     case .podcast:
-      return "Podcasts"
+      return T("Podcasts")
     }
   }
 

@@ -100,7 +100,7 @@ final class HomeVC: UICollectionViewController {
     let add = UIBarButtonItem(
       image: UIImage(systemName: "plus"), style: .plain, target: self, action: #selector(addMusicTapped)
     )
-    add.accessibilityLabel = "Musik hinzufügen"
+    add.accessibilityLabel = T("Musik hinzufügen")
     navigationItem.rightBarButtonItem = add
 
     accountNotificationHandler = AccountNotificationHandler(
@@ -382,7 +382,7 @@ final class HomeVC: UICollectionViewController {
           self.appDelegate.player.insertUserQueue(playables: [song])
           self.appDelegate.eventLogger.info(
             topic: "Song des Tages",
-            message: "„\(song.title)“ wird als Nächstes gespielt."
+            message: T("„\(song.title)“ wird als Nächstes gespielt.")
           )
         }
         return cell
@@ -731,7 +731,7 @@ final class SectionHeaderView: UICollectionReusableView {
     btn.translatesAutoresizingMaskIntoConstraints = false
     btn.setImage(UIImage.refresh, for: .normal)
     btn.isHidden = true
-    btn.accessibilityLabel = "Refresh Randoms"
+    btn.accessibilityLabel = T("Refresh Randoms")
     return btn
   }()
 
@@ -922,7 +922,7 @@ final class HomeRecapCell: UICollectionViewCell {
     subtitleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
     subtitleLabel.adjustsFontForContentSizeCategory = true
 
-    pill.text = "  Jetzt ansehen ›  "
+    pill.text = T("  Jetzt ansehen ›  ")
     pill.font = UIFontMetrics(forTextStyle: .subheadline)
       .scaledFont(for: .systemFont(ofSize: 15, weight: .semibold))
     pill.adjustsFontForContentSizeCategory = true
@@ -1018,7 +1018,7 @@ final class HomeRecapCell: UICollectionViewCell {
     }
     artwork.display(theme: theme, container: playlist, cornerRadius: .verySmall)
     artwork.layer.cornerRadius = 0
-    accessibilityLabel = "Rückblick \(label). \(minutes)"
+    accessibilityLabel = T("Rückblick \(label). \(minutes)")
     setNeedsLayout()
   }
 }
@@ -1047,7 +1047,7 @@ final class HomeSongOfTheDayCell: UICollectionViewCell {
     contentView.layer.cornerCurve = .continuous
     contentView.clipsToBounds = true
 
-    captionLabel.text = "Song des Tages"
+    captionLabel.text = T("Song des Tages")
     captionLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
     captionLabel.textColor = .secondaryLabel
     titleLabel.font = UIFontMetrics(forTextStyle: .title3)
@@ -1064,7 +1064,7 @@ final class HomeSongOfTheDayCell: UICollectionViewCell {
     )
     addConfig.baseForegroundColor = .secondaryLabel
     addButton.configuration = addConfig
-    addButton.accessibilityLabel = "Als Nächstes spielen"
+    addButton.accessibilityLabel = T("Als Nächstes spielen")
     addButton.addAction(UIAction { [weak self] _ in self?.addHandler?() }, for: .touchUpInside)
 
     var playConfig = UIButton.Configuration.filled()
@@ -1076,7 +1076,7 @@ final class HomeSongOfTheDayCell: UICollectionViewCell {
     playConfig.baseForegroundColor = .systemBackground
     playConfig.cornerStyle = .capsule
     playButton.configuration = playConfig
-    playButton.accessibilityLabel = "Abspielen"
+    playButton.accessibilityLabel = T("Abspielen")
     playButton.addAction(UIAction { [weak self] _ in self?.playHandler?() }, for: .touchUpInside)
 
     let textStack = UIStackView(arrangedSubviews: [captionLabel, titleLabel, artistLabel])
@@ -1116,6 +1116,6 @@ final class HomeSongOfTheDayCell: UICollectionViewCell {
     artistLabel.text = song.creatorName
     artwork.display(theme: theme, container: song, cornerRadius: .verySmall)
     artwork.layer.cornerRadius = 0
-    accessibilityLabel = "Song des Tages: \(song.title) von \(song.creatorName)"
+    accessibilityLabel = T("Song des Tages: \(song.title) von \(song.creatorName)")
   }
 }

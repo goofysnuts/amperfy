@@ -163,7 +163,7 @@ class PlaylistAddArtistsVC: SingleSnapshotFetchedResultsTableViewController<Arti
          sectionNameInitial != SectionIndexType.noRatingIndexSymbol {
         return "\(sectionNameInitial) Star\(sectionNameInitial != "1" ? "s" : "")"
       } else {
-        return "Not rated"
+        return T("Not rated")
       }
     case .newest:
       return super.tableView(tableView, titleForHeaderInSection: section)

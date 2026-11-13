@@ -21,6 +21,7 @@
 
 import OSLog
 import UIKit
+import AmperfyKit
 
 // MARK: - KeyboardCommand
 
@@ -45,21 +46,21 @@ enum KeyboardCommands: CaseIterable {
   var name: String {
     switch self {
     case .togglePausePlay:
-      return "Toggle Play and Pause"
+      return T("Toggle Play and Pause")
     case .previous:
-      return "Play Previous"
+      return T("Play Previous")
     case .next:
-      return "Play Next"
+      return T("Play Next")
     case .search:
-      return "Search"
+      return T("Search")
     case .repeatPlayback:
-      return "Repeat"
+      return T("Repeat")
     case .shuffle:
-      return "Shuffle"
+      return T("Shuffle")
     case .musicPodcastMode:
-      return "Switch between Music and Podcast mode"
+      return T("Switch between Music and Podcast mode")
     case .openClosePlayer:
-      return "Open/Close Player"
+      return T("Open/Close Player")
     }
   }
 

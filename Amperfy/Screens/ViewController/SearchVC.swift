@@ -50,16 +50,16 @@ class SearchDiffableDataSource: BasicUITableViewDiffableDataSource {
       if searchVC.searchHistory.isEmpty {
         return ""
       } else {
-        return "Zuletzt gesucht"
+        return T("Zuletzt gesucht")
       }
     case .Playlist:
-      return "Playlists"
+      return T("Playlists")
     case .Artist:
-      return "Interpreten"
+      return T("Interpreten")
     case .Album:
-      return "Alben"
+      return T("Alben")
     case .Song:
-      return "Songs"
+      return T("Songs")
     case .none:
       return ""
     }
@@ -94,11 +94,11 @@ class SearchVC: BasicTableViewController {
 
     var title: String {
       switch self {
-      case .top: return "Top-Treffer"
-      case .artists: return "Interpreten"
-      case .albums: return "Alben"
-      case .songs: return "Songs"
-      case .playlists: return "Playlists"
+      case .top: return T("Top-Treffer")
+      case .artists: return T("Interpreten")
+      case .albums: return T("Alben")
+      case .songs: return T("Songs")
+      case .playlists: return T("Playlists")
       }
     }
 
@@ -408,7 +408,7 @@ class SearchVC: BasicTableViewController {
     extendSafeAreaToAccountForMiniPlayer()
     appDelegate.userStatistics.visited(.search)
     configureSearchController(
-      placeholder: "Search in \"Library\"",
+      placeholder: T("Search in \"Library\""),
       scopeButtonTitles: ["All", "Cached"]
     )
   }
@@ -584,7 +584,7 @@ class SearchVC: BasicTableViewController {
       content.textProperties.color = .label
       header.contentConfiguration = content
       let target = SearchCategory.allCases.first { $0.section == searchSection }
-      let more = UIButton(type: .system, primaryAction: UIAction(title: "Mehr anzeigen …") { [weak self] _ in
+      let more = UIButton(type: .system, primaryAction: UIAction(title: T("Mehr anzeigen …")) { [weak self] _ in
         if let target { self?.select(category: target) }
       })
       more.translatesAutoresizingMaskIntoConstraints = false
@@ -606,7 +606,7 @@ class SearchVC: BasicTableViewController {
 
     let clearButton = UIButton(
       type: .system,
-      primaryAction: UIAction(title: "Clear") { [weak self] _ in
+      primaryAction: UIAction(title: T("Clear")) { [weak self] _ in
         self?.clearSearchHistory()
       }
     )
@@ -955,7 +955,7 @@ class SearchVC: BasicTableViewController {
   lazy var noSearchHistoryConfig: UIContentUnavailableConfiguration = {
     var config = UIContentUnavailableConfiguration.empty()
     config.image = .clock
-    config.text = "No Search History"
+    config.text = T("No Search History")
     config.secondaryText = "Your search history will appear here."
     return config
   }()

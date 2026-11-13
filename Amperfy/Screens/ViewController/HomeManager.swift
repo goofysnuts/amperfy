@@ -790,7 +790,7 @@ final class RecapStoriesVC: UIViewController {
     )
     closeConfig.baseForegroundColor = .white
     closeButton.configuration = closeConfig
-    closeButton.accessibilityLabel = "Schließen"
+    closeButton.accessibilityLabel = T("Schließen")
     closeButton.translatesAutoresizingMaskIntoConstraints = false
     closeButton.addAction(UIAction { [weak self] _ in self?.close() }, for: .touchUpInside)
     view.addSubview(closeButton)
@@ -1022,13 +1022,13 @@ final class RecapStoriesVC: UIViewController {
       }
     }
     if !r.topArtists.isEmpty {
-      add { vc in vc.listSlide(title: "Deine Top-Interpreten", items: r.topArtists, round: true) }
+      add { vc in vc.listSlide(title: T("Deine Top-Interpreten"), items: r.topArtists, round: true) }
     }
     if r.topSongs.count > 1 {
-      add { vc in vc.listSlide(title: "Deine Top-Songs", items: r.topSongs, round: false) }
+      add { vc in vc.listSlide(title: T("Deine Top-Songs"), items: r.topSongs, round: false) }
     }
     if !r.topAlbums.isEmpty {
-      add { vc in vc.listSlide(title: "Deine Top-Alben", items: r.topAlbums, round: false) }
+      add { vc in vc.listSlide(title: T("Deine Top-Alben"), items: r.topAlbums, round: false) }
     }
     if !r.topGenres.isEmpty {
       add { vc in vc.genreSlide(r.topGenres) }
@@ -1229,7 +1229,7 @@ final class RecapStoriesVC: UIViewController {
     let cover = coverView(coverArtId: r.topSongs.first?.coverArtId, round: false, size: 120)
 
     var playConfig = UIButton.Configuration.filled()
-    playConfig.title = "Playlist abspielen"
+    playConfig.title = T("Playlist abspielen")
     playConfig.image = UIImage(systemName: "play.fill")
     playConfig.imagePadding = 8
     playConfig.baseBackgroundColor = .white
@@ -1240,7 +1240,7 @@ final class RecapStoriesVC: UIViewController {
     play.addAction(UIAction { [weak self] _ in self?.playPlaylist() }, for: .touchUpInside)
 
     var doneConfig = UIButton.Configuration.plain()
-    doneConfig.title = "Fertig"
+    doneConfig.title = T("Fertig")
     doneConfig.baseForegroundColor = .white
     let done = UIButton(configuration: doneConfig)
     done.addAction(UIAction { [weak self] _ in self?.close() }, for: .touchUpInside)

@@ -53,7 +53,7 @@ struct EqualizerSettingsView: View {
       SettingsList {
         SettingsSection(content: {
           SettingsCheckBoxRow(
-            title: "Enable Equalizer",
+            title: T("Enable Equalizer"),
             isOn: Binding(
               get: { settings.isEqualizerEnabled },
               set: { isEnabled in
@@ -63,7 +63,7 @@ struct EqualizerSettingsView: View {
           )
 
           if settings.isEqualizerEnabled {
-            SettingsRow(title: "Active Equalizer") {
+            SettingsRow(title: T("Active Equalizer")) {
               Menu(settings.activeEqualizerSetting.description) {
                 Button(EqualizerSetting.off.description) {
                   settings.activeEqualizerSetting = EqualizerSetting.off
@@ -79,7 +79,7 @@ struct EqualizerSettingsView: View {
         })
 
         SettingsSection(content: {
-          SettingsRow(title: "Equalizer") {
+          SettingsRow(title: T("Equalizer")) {
             Menu((eqSettingToEdit != nil) ? eqSettingNameSaved : "Select") {
               ForEach(settings.equalizerSettings, id: \.self) { eqSetting in
                 Button(eqSetting.description) {
@@ -89,7 +89,7 @@ struct EqualizerSettingsView: View {
                   eqSettingGains = eqSetting.gains.compactMap { CGFloat($0) }
                 }
               }
-              Button("Create new Equalizer") {
+              Button(T("Create new Equalizer")) {
                 let newEQ = EqualizerSetting(name: "My new Equalizer")
                 var curEqSetting = settings.equalizerSettings
                 curEqSetting.append(newEQ)
@@ -103,7 +103,7 @@ struct EqualizerSettingsView: View {
           }
 
           if eqSettingToEdit != nil {
-            SettingsRow(title: "Name") {
+            SettingsRow(title: T("Name")) {
               TextField("Equalizer Name", text: $eqSettingName)
                 .multilineTextAlignment(.trailing)
             }
@@ -115,7 +115,7 @@ struct EqualizerSettingsView: View {
               gradientColors: [Color(settings.themePreference.asColor), .clear]
             )
 
-            SettingsButtonRow(title: "Save") {
+            SettingsButtonRow(title: T("Save")) {
               guard var eqSettingToEdit else { return }
               var curEqSetting = settings.equalizerSettings
               guard let index = curEqSetting.firstIndex(of: eqSettingToEdit) else { return }
@@ -130,15 +130,15 @@ struct EqualizerSettingsView: View {
                 settings.activeEqualizerSetting = eqSettingToEdit
               }
             }
-            SettingsButtonRow(title: "Delete", actionType: .destructive) {
+            SettingsButtonRow(title: T("Delete"), actionType: .destructive) {
               isShowDeleteAlert = true
             }.alert(isPresented: $isShowDeleteAlert) {
               Alert(
-                title: Text("Delete Equalizer"),
+                title: Text(T("Delete Equalizer")),
                 message: Text(
                   "Are you sure to delete this equalizer?"
                 ),
-                primaryButton: .destructive(Text("Delete")) {
+                primaryButton: .destructive(Text(T("Delete"))) {
                   guard let eqSettingToEdit else { return }
                   var curEqSetting = settings.equalizerSettings
                   guard let index = curEqSetting.firstIndex(of: eqSettingToEdit) else { return }
@@ -156,10 +156,10 @@ struct EqualizerSettingsView: View {
             }
           }
 
-        }, header: "Equalizer Editor")
+        }, header: T("Equalizer Editor"))
       }
     }
-    .navigationTitle("Equalizer")
+    .navigationTitle(T("Equalizer"))
     .navigationBarTitleDisplayMode(.inline)
   }
 }

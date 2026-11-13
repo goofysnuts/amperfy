@@ -121,7 +121,7 @@ class PlaylistEditVC: SingleSnapshotFetchedResultsTableViewController<PlaylistIt
       action: nil
     )
     selectBarButton = UIBarButtonItem(
-      title: "Select",
+      title: T("Select"),
       style: .plain,
       target: self,
       action: #selector(selectBarButtonPressed)
@@ -223,7 +223,7 @@ class PlaylistEditVC: SingleSnapshotFetchedResultsTableViewController<PlaylistIt
 
   func refreshBarButtons() {
     doneButton = UIBarButtonItem(
-      title: "Done",
+      title: T("Done"),
       style: .plain,
       target: self,
       action: #selector(doneBarButtonPressed)

@@ -63,21 +63,21 @@ class DownloadsVC: SingleFetchedResultsTableViewController<DownloadMO> {
 
   private func createActionButtonMenu() -> UIMenu {
     let clearFinishedDownloadsAction = UIAction(
-      title: "Clear finished downloads",
+      title: T("Clear finished downloads"),
       image: UIImage.clear,
       handler: { _ in
         self.downloadManager.clearFinishedDownloads()
       }
     )
     let retryFailedDownloadsAction = UIAction(
-      title: "Retry failed downloads",
+      title: T("Retry failed downloads"),
       image: UIImage.redo,
       handler: { _ in
         self.downloadManager.resetFailedDownloads()
       }
     )
     let cancelAllDownloadsAction = UIAction(
-      title: "Cancel all downloads",
+      title: T("Cancel all downloads"),
       image: UIImage.cancleDownloads,
       handler: { _ in
         self.downloadManager.cancelDownloads()

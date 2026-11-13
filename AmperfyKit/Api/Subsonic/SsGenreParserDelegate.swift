@@ -24,6 +24,28 @@ import Foundation
 import UIKit
 
 class SsGenreParserDelegate: SsXmlLibParser {
+  /// Blackbox: Genres ohne Songs (z. B. Reste gelöschter Dateien) nicht anzeigen
+  private var currentSongCount: Int?
+
+  override func parser(
+    _ parser: XMLParser,
+    didStartElement elementName: String,
+    namespaceURI: String?,
+    qualifiedName qName: String?,
+    attributes attributeDict: [String: String]
+  ) {
+    super.parser(
+      parser,
+      didStartElement: elementName,
+      namespaceURI: namespaceURI,
+      qualifiedName: qName,
+      attributes: attributeDict
+    )
+    if elementName == "genre" {
+      currentSongCount = attributeDict["songCount"].flatMap { Int($0) }
+    }
+  }
+
   override func parser(
     _ parser: XMLParser,
     didEndElement elementName: String,
@@ -33,7 +55,12 @@ class SsGenreParserDelegate: SsXmlLibParser {
     switch elementName {
     case "genre":
       let genreName = buffer
-      if prefetch.prefetchedGenreDict[genreName] != nil {
+      if currentSongCount == 0 {
+        if let empty = prefetch.prefetchedGenreDict[genreName] {
+          library.deleteGenre(genre: empty)
+          prefetch.prefetchedGenreDict[genreName] = nil
+        }
+      } else if prefetch.prefetchedGenreDict[genreName] != nil {
         // info already synced -> skip
       } else {
         let genre = library.createGenre(account: account)

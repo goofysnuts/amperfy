@@ -577,6 +577,11 @@ public class LibraryStorage: PlayableFileCachable {
     return Artist(managedObject: artistMO)
   }
 
+  /// Blackbox: leeres Genre entfernen (Songs/Alben behalten ihre übrigen Genres)
+  func deleteGenre(genre: Genre) {
+    context.delete(genre.managedObject)
+  }
+
   func deleteArtist(artist: Artist) {
     context.delete(artist.managedObject)
   }

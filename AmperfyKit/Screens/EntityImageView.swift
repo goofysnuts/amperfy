@@ -154,19 +154,27 @@ open class EntityImageView: UIView {
     }
   }
 
-  /// Blackbox: Genre-Kachel mit dem Cover eines Albums dieses Genres
+  /// Blackbox: Genre-Kachel – erzeugtes Genre-Cover von Blackbox Request, sonst das Cover eines Albums
   private func displayGenreCover(genre: Genre, accountInfo: AccountInfo) {
     let name = genre.name
     let key = "genre:" + name
     coverRequestKey = key
+    if let generated = GenreCoverResolver.shared.cachedGeneratedCover(genre: name) {
+      showCoverOverlay(generated)
+      return
+    }
     if let id = GenreCoverResolver.shared.cachedCoverArtId(genre: name),
        let cached = PlaylistCoverLoader.shared.cachedImage(coverArtId: id) {
       showCoverOverlay(cached)
-      return
+    } else {
+      hideCoverOverlay()
     }
-    hideCoverOverlay()
-    coverRequestKey = key
     Task { @MainActor [weak self] in
+      if let generated = await GenreCoverResolver.shared.generatedCover(genre: name) {
+        guard let self, self.coverRequestKey == key else { return }
+        self.showCoverOverlay(generated)
+        return
+      }
       guard let id = await GenreCoverResolver.shared.coverArtId(genre: name, accountInfo: accountInfo),
             let image = await PlaylistCoverLoader.shared.image(coverArtId: id, accountInfo: accountInfo)
       else { return }
@@ -322,6 +330,71 @@ public final class GenreCoverResolver {
   }
 
   public func cachedCoverArtId(genre: String) -> String? { ids[genre] }
+
+  // MARK: erzeugte Genre-Cover (Blackbox Request, /api/genre-cover)
+
+  private let generated = NSCache<NSString, UIImage>()
+  private var generatedFailed = [String: Date]()
+  private var generatedRunning = [String: Task<UIImage?, Never>]()
+
+  private var requestBase: String? {
+    let url = (UserDefaults.standard.string(forKey: "blackbox.request.url") ?? "")
+      .trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+    return url.isEmpty ? nil : (url.contains("://") ? url : "http://" + url)
+  }
+
+  private func generatedFile(_ genre: String) -> URL {
+    let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("BlackboxGenreCovers", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let safe = genre.lowercased().unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }.joined()
+    return dir.appendingPathComponent(safe + ".jpg")
+  }
+
+  public func cachedGeneratedCover(genre: String) -> UIImage? {
+    guard requestBase != nil else { return nil }
+    if let image = generated.object(forKey: genre as NSString) { return image }
+    let file = generatedFile(genre)
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
+          let date = attrs[.modificationDate] as? Date,
+          Date().timeIntervalSince(date) < 3 * 24 * 3600,
+          let data = try? Data(contentsOf: file),
+          let image = UIImage(data: data)
+    else { return nil }
+    generated.setObject(image, forKey: genre as NSString)
+    return image
+  }
+
+  public func generatedCover(genre: String) async -> UIImage? {
+    if let image = cachedGeneratedCover(genre: genre) { return image }
+    guard let base = requestBase else { return nil }
+    if let failedAt = generatedFailed[genre], Date().timeIntervalSince(failedAt) < 600 { return nil }
+    if let task = generatedRunning[genre] { return await task.value }
+    let file = generatedFile(genre)
+    let apiKey = UserDefaults.standard.string(forKey: "blackbox.request.apikey") ?? ""
+    let task = Task<UIImage?, Never> {
+      var comps = URLComponents(string: base + "/api/genre-cover")
+      comps?.queryItems = [URLQueryItem(name: "name", value: genre)]
+      guard let url = comps?.url else { return nil }
+      var request = URLRequest(url: url, timeoutInterval: 30)
+      if !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key") }
+      guard let (data, response) = try? await URLSession.shared.data(for: request),
+            (response as? HTTPURLResponse)?.statusCode == 200,
+            let image = UIImage(data: data)
+      else { return nil }
+      try? data.write(to: file, options: .atomic)
+      return image
+    }
+    generatedRunning[genre] = task
+    let image = await task.value
+    generatedRunning[genre] = nil
+    if let image {
+      generated.setObject(image, forKey: genre as NSString)
+    } else {
+      generatedFailed[genre] = Date()
+    }
+    return image
+  }
 
   public func coverArtId(genre: String, accountInfo: AccountInfo) async -> String? {
     if let id = ids[genre] { return id }

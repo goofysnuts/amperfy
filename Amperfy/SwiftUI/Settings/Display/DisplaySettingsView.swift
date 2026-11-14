@@ -173,18 +173,7 @@ struct DisplaySettingsView: View {
           "The player shuffle button is displayed but non-interactive."
         )
 
-        #if !targetEnvironment(macCatalyst)
-          SettingsSection(
-            content: {
-              SettingsCheckBoxRow(
-                title: T("Collapse Toolbar Player"),
-                isOn: $settings.isToolbarPlayerAutoCollapse
-              )
-            },
-            footer:
-            "Collapse the toolbar player into a compact view when scrolling"
-          )
-        #endif
+        // Blackbox: der Mini-Player wird beim Scrollen nie verkleinert – Einstellung entfällt
       }
     }
     .navigationTitle(T("Display"))

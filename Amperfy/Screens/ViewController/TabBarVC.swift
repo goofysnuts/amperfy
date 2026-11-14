@@ -144,7 +144,8 @@ class TabBarVC: UITabBarController {
       object: nil
     )
 
-    tabBarMinimizeBehavior = .onScrollDown
+    // Blackbox: Mini-Player und Tab-Leiste beim Scrollen nicht verkleinern
+    tabBarMinimizeBehavior = .never
 
     miniPlayer = MiniPlayerView(player: appDelegate.player)
     miniPlayer!.configureForiOS()
@@ -248,8 +249,8 @@ class TabBarVC: UITabBarController {
 
   @objc
   func handleAutoCollapseToolbarPlayer(notification: Notification) {
-    tabBarMinimizeBehavior = appDelegate.storage.settings.user
-      .isToolbarPlayerAutoCollapse ? .onScrollDown : .never
+    // Blackbox: Mini-Player bleibt immer in voller Größe
+    tabBarMinimizeBehavior = .never
   }
 
   func refresh() {

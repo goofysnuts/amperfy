@@ -1072,23 +1072,23 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
     super.init(frame: frame)
     artwork.contentMode = .scaleAspectFill
     artwork.clipsToBounds = true
-    artwork.layer.cornerRadius = 8
+    artwork.layer.cornerRadius = 9
     artwork.layer.cornerCurve = .continuous
     artwork.backgroundColor = .tertiarySystemFill
 
-    titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-    subtitleLabel.font = .systemFont(ofSize: 13)
+    titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+    subtitleLabel.font = .systemFont(ofSize: 14)
     subtitleLabel.textColor = .secondaryLabel
 
     var playConfig = UIButton.Configuration.plain()
-    playConfig.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
+    playConfig.image = UIImage(systemName: "play.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .bold))
     playConfig.baseForegroundColor = .label
     playButton.configuration = playConfig
     playButton.accessibilityLabel = T("Wiedergabe")
     playButton.addAction(UIAction { [weak self] _ in self?.appDelegateRef.player.togglePlayPause() }, for: .touchUpInside)
 
     var nextConfig = UIButton.Configuration.plain()
-    nextConfig.image = UIImage(systemName: "forward.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold))
+    nextConfig.image = UIImage(systemName: "forward.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .bold))
     nextConfig.baseForegroundColor = .label
     nextButton.configuration = nextConfig
     nextButton.accessibilityLabel = T("Weiter")
@@ -1096,9 +1096,9 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
 
     ringHost.isUserInteractionEnabled = false
     ringTrack.fillColor = UIColor.clear.cgColor
-    ringTrack.lineWidth = 2.5
+    ringTrack.lineWidth = 3
     ring.fillColor = UIColor.clear.cgColor
-    ring.lineWidth = 2.5
+    ring.lineWidth = 3
     ring.lineCap = .round
     ring.strokeEnd = 0
     ringHost.layer.addSublayer(ringTrack)
@@ -1112,25 +1112,26 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
       addSubview($0)
     }
     NSLayoutConstraint.activate([
-      artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      // Blackbox: Cover nutzt fast die volle Höhe der Leiste, mehr Abstand zum runden Rand links
+      artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
       artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
-      artwork.heightAnchor.constraint(equalTo: heightAnchor, constant: -14),
+      artwork.heightAnchor.constraint(equalTo: heightAnchor, constant: -8),
       artwork.widthAnchor.constraint(equalTo: artwork.heightAnchor),
-      texts.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 10),
+      texts.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 12),
       texts.centerYAnchor.constraint(equalTo: centerYAnchor),
       texts.trailingAnchor.constraint(lessThanOrEqualTo: playButton.leadingAnchor, constant: -6),
-      nextButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+      nextButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
       nextButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-      nextButton.widthAnchor.constraint(equalToConstant: 40),
-      nextButton.heightAnchor.constraint(equalToConstant: 40),
-      playButton.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor, constant: -2),
+      nextButton.widthAnchor.constraint(equalToConstant: 44),
+      nextButton.heightAnchor.constraint(equalToConstant: 44),
+      playButton.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor, constant: -4),
       playButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-      playButton.widthAnchor.constraint(equalToConstant: 40),
-      playButton.heightAnchor.constraint(equalToConstant: 40),
+      playButton.widthAnchor.constraint(equalToConstant: 44),
+      playButton.heightAnchor.constraint(equalToConstant: 44),
       ringHost.centerXAnchor.constraint(equalTo: playButton.centerXAnchor),
       ringHost.centerYAnchor.constraint(equalTo: playButton.centerYAnchor),
-      ringHost.widthAnchor.constraint(equalToConstant: 36),
-      ringHost.heightAnchor.constraint(equalToConstant: 36),
+      ringHost.widthAnchor.constraint(equalToConstant: 42),
+      ringHost.heightAnchor.constraint(equalToConstant: 42),
     ])
     let tap = UITapGestureRecognizer(target: self, action: #selector(openPlayer))
     addGestureRecognizer(tap)
@@ -1151,8 +1152,8 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
   override func layoutSubviews() {
     super.layoutSubviews()
     let path = UIBezierPath(
-      arcCenter: CGPoint(x: 18, y: 18),
-      radius: 16.5,
+      arcCenter: CGPoint(x: 21, y: 21),
+      radius: 19.5,
       startAngle: -.pi / 2,
       endAngle: 1.5 * .pi,
       clockwise: true
@@ -1197,7 +1198,7 @@ final class BlackboxMiniPlayer: UIView, MusicPlayable {
     var config = playButton.configuration
     config?.image = UIImage(
       systemName: np.isPlaying ? "pause.fill" : "play.fill",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
     )
     playButton.configuration = config
     playButton.accessibilityLabel = np.isPlaying ? "Pause" : "Wiedergabe"
